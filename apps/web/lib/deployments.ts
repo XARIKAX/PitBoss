@@ -17,6 +17,7 @@ export const PLACEHOLDER: Address = '0x0000000000000000000000000000000000000000'
 export type DeploymentMap = {
   weth: Address;
   oracle: Address;
+  pit: Address;
   flatAmmVault: Address;
   degenRollFactory: Address;
   certificateCounter: Address;
@@ -26,16 +27,19 @@ export type DeploymentMap = {
   activationManager: Address;
   pitBoss: Address;
   entropyConductor: Address;
-  // Modules still being wired — TODO: populate from deploy output.
   launcher: Address;
   locker: Address;
   loans: Address;
+  openingBell: Address;
+  seasonEngine: Address;
+  swapRouter: Address;
   stockTokens: Record<string, Address>;
 };
 
 const EMPTY: DeploymentMap = {
   weth: PLACEHOLDER,
   oracle: PLACEHOLDER,
+  pit: PLACEHOLDER,
   flatAmmVault: PLACEHOLDER,
   degenRollFactory: PLACEHOLDER,
   certificateCounter: PLACEHOLDER,
@@ -48,6 +52,9 @@ const EMPTY: DeploymentMap = {
   launcher: PLACEHOLDER,
   locker: PLACEHOLDER,
   loans: PLACEHOLDER,
+  openingBell: PLACEHOLDER,
+  seasonEngine: PLACEHOLDER,
+  swapRouter: PLACEHOLDER,
   stockTokens: {},
 };
 
@@ -57,6 +64,7 @@ const EMPTY: DeploymentMap = {
  * other. Keys the JSON doesn't carry stay at their placeholder.
  */
 const KEY_MAP: Record<string, keyof DeploymentMap> = {
+  PIT: 'pit',
   PitBoss: 'pitBoss',
   HouseBook: 'houseBook',
   FlatAMMVault: 'flatAmmVault',
@@ -69,18 +77,68 @@ const KEY_MAP: Record<string, keyof DeploymentMap> = {
   LauncherFactory: 'launcher',
   LiquidityLocker: 'locker',
   LoanVault: 'loans',
+  OpeningBell: 'openingBell',
+  SeasonEngine: 'seasonEngine',
+  SwapRouter: 'swapRouter',
   Oracle: 'oracle',
 };
+
+/** Map a raw deployments JSON (PascalCase keys) to the camelCase partial map. */
+function mapRaw(raw: Record<string, unknown>): Partial<DeploymentMap> {
+  const out: Partial<DeploymentMap> = {};
+  for (const [pascal, camel] of Object.entries(KEY_MAP)) {
+    const v = raw[pascal];
+    if (typeof v === 'string' && v.startsWith('0x')) (out as Record<string, unknown>)[camel] = v;
+  }
+  if (typeof raw.StockSample === 'string' && raw.StockSample.startsWith('0x')) {
+    out.stockTokens = { tNVDA: raw.StockSample as Address };
+  }
+  return out;
+}
+
+// Webpack's require.context is what lets deployments load in the browser under
+// `output: 'export'`. Declared optional so plain node (no webpack) still compiles.
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace NodeJS {
+    interface Require {
+      context?(
+        directory: string,
+        useSubdirectories?: boolean,
+        regExp?: RegExp,
+      ): { keys(): string[]; (id: string): unknown };
+    }
+  }
+}
 
 /**
  * Attempt to load a deployments JSON for a chainId.
  *
- * Server-only: guarded by `typeof window` and resolved through an intentionally
- * non-analyzable `require` (via eval) so webpack never tries to bundle — or fail
- * on — a deployments file that may not exist yet. On the client, and whenever the
- * file is absent, this returns null and callers fall back to placeholders.
+ * Two strategies:
+ *  1. webpack `require.context` over contracts/deployments — statically bundles
+ *     whichever deployments.<chainId>.json files exist at build time, so the
+ *     addresses are available on the client too (static export ships them).
+ *     An empty directory yields an empty context — never a build failure.
+ *  2. Node `fs` fallback (via a non-analyzable eval'd require) for any
+ *     non-webpack server context.
+ *
+ * When the file is absent, returns null and callers fall back to placeholders.
  */
 function tryLoad(chainId: number): Partial<DeploymentMap> | null {
+  // Strategy 1: webpack context (works client + server when bundled).
+  try {
+    if (typeof require !== 'undefined' && typeof require.context === 'function') {
+      const ctx = require.context('../../../contracts/deployments', false, /deployments\.\d+\.json$/);
+      const key = `./deployments.${chainId}.json`;
+      if (ctx.keys().includes(key)) {
+        return mapRaw(ctx(key) as Record<string, unknown>);
+      }
+      return null;
+    }
+  } catch {
+    // fall through to fs
+  }
+  // Strategy 2: plain node fs (server only).
   if (typeof window !== 'undefined') return null;
   try {
     // eslint-disable-next-line no-eval
@@ -97,12 +155,7 @@ function tryLoad(chainId: number): Partial<DeploymentMap> | null {
     );
     if (!fs.existsSync(file)) return null;
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, string>;
-    const out: Partial<DeploymentMap> = {};
-    for (const [pascal, camel] of Object.entries(KEY_MAP)) {
-      if (raw[pascal]) (out as Record<string, string>)[camel] = raw[pascal];
-    }
-    if (raw.StockSample) out.stockTokens = { tNVDA: raw.StockSample as Address };
-    return out;
+    return mapRaw(raw);
   } catch {
     return null;
   }

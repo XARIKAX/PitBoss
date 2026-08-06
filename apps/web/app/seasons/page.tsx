@@ -1,17 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAccount } from 'wagmi';
 import { PageHeader, Section, EmptyState, TodoTag } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
+import { useContracts, useRead } from '@/lib/contracts';
+import { useTx } from '@/lib/useTx';
+import { isDeployed } from '@/lib/deployments';
 import { countdown } from '@/lib/format';
 
 /**
- * Seasons — leaderboard, countdown to season end, past seasons.
- * Placeholder standings; wire to season/scoring reads.
+ * Seasons — live SeasonEngine reads (seasonStart / seasonIndex / SEASON_LENGTH
+ * / seasonEnded), countdown to season end, permissionless rollSeason.
+ * Leaderboard stays the static placeholder (keeper-generated standings).
  */
-// Placeholder: season ends 30 days out. TODO: read season end from contract.
-const SEASON_END = Date.now() + 30 * 86400_000;
-
 const STANDINGS = [
   { rank: 1, who: '0x9f…21a', score: 128_400 },
   { rank: 2, who: '0x4b…c07', score: 119_050 },
@@ -21,12 +23,28 @@ const STANDINGS = [
 ];
 
 export default function SeasonsPage() {
-  const [now, setNow] = useState(Date.now());
+  const { isConnected } = useAccount();
+  const { c } = useContracts();
+  const { send, busy } = useTx();
+  const engineLive = isDeployed(c.seasonEngine.address);
+
+  const seasonStart = useRead<bigint>({ contract: c.seasonEngine, functionName: 'seasonStart', refetchInterval: 30_000 });
+  const seasonIndex = useRead<bigint>({ contract: c.seasonEngine, functionName: 'seasonIndex', refetchInterval: 30_000 });
+  const seasonLength = useRead<bigint>({ contract: c.seasonEngine, functionName: 'SEASON_LENGTH' });
+  const ended = useRead<boolean>({ contract: c.seasonEngine, functionName: 'seasonEnded', refetchInterval: 15_000 });
+
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const c = countdown(SEASON_END, now);
+
+  const endMs =
+    seasonStart.data != null && seasonLength.data != null
+      ? Number(seasonStart.data + seasonLength.data) * 1000
+      : null;
+  const c9 = countdown(endMs ?? now, now);
+  const seasonNo = seasonIndex.data != null ? (seasonIndex.data + 1n).toString() : '…';
 
   return (
     <ChainGuard>
@@ -38,26 +56,59 @@ export default function SeasonsPage() {
       />
 
       {/* COUNTDOWN */}
-      <Section label="Season 1" title="Time" emphasis="left.">
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { k: 'Days', v: c.days },
-            { k: 'Hours', v: c.hours },
-            { k: 'Mins', v: c.minutes },
-            { k: 'Secs', v: c.seconds },
-          ].map((u) => (
-            <div key={u.k} className="card text-center">
-              <p className="data text-4xl text-lime">{String(u.v).padStart(2, '0')}</p>
-              <p className="eyebrow mt-1">{u.k}</p>
+      <Section label={engineLive ? `Season ${seasonNo}` : 'Season'} title="Time" emphasis="left.">
+        {!engineLive ? (
+          <EmptyState
+            title="Not deployed"
+            hint="The SeasonEngine has no address on this chain yet. The live season countdown and roll control show here."
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { k: 'Days', v: c9.days },
+                { k: 'Hours', v: c9.hours },
+                { k: 'Mins', v: c9.minutes },
+                { k: 'Secs', v: c9.seconds },
+              ].map((u) => (
+                <div key={u.k} className="card text-center">
+                  <p className="data text-4xl text-lime">
+                    {endMs == null ? '—' : String(u.v).padStart(2, '0')}
+                  </p>
+                  <p className="eyebrow mt-1">{u.k}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="mt-3">
-          <TodoTag>Season end read</TodoTag>
-        </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={() =>
+                  send(
+                    {
+                      address: c.seasonEngine.address,
+                      abi: c.seasonEngine.abi,
+                      functionName: 'rollSeason',
+                    },
+                    { title: `Roll season ${seasonNo}` },
+                  )
+                }
+                disabled={!isConnected || busy || ended.data !== true}
+                className="pill-lime disabled:opacity-50"
+              >
+                {ended.data === true ? 'Roll the season' : 'Season still running'}
+              </button>
+              <span className="data text-xs text-mute">
+                {ended.data === true
+                  ? 'Anyone can roll — scores compress and the next season starts.'
+                  : endMs != null
+                    ? `ends ${new Date(endMs).toLocaleString()}`
+                    : ''}
+              </span>
+            </div>
+          </>
+        )}
       </Section>
 
-      {/* LEADERBOARD */}
+      {/* LEADERBOARD (keeper-generated placeholder) */}
       <Section label="Leaderboard" title="Who's" emphasis="running it.">
         <div className="overflow-x-auto rounded-2xl border border-line">
           <table className="data w-full min-w-[420px] border-collapse text-sm">
@@ -80,7 +131,7 @@ export default function SeasonsPage() {
           </table>
         </div>
         <div className="mt-3">
-          <TodoTag>Season scoring read (placeholder standings)</TodoTag>
+          <TodoTag>Keeper-generated standings (placeholder)</TodoTag>
         </div>
       </Section>
 
@@ -88,8 +139,7 @@ export default function SeasonsPage() {
       <Section label="Archive" title="Past" emphasis="seasons.">
         <EmptyState
           title="No past seasons yet"
-          hint="When Season 1 settles, its final standings and payouts archive here."
-          todo="Season archive read"
+          hint="When a season rolls, its final standings and payouts archive here."
         />
       </Section>
     </ChainGuard>

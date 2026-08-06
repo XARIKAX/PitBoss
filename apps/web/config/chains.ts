@@ -35,11 +35,16 @@ export type ChainConfig = {
 
 export const ROBINHOOD_CHAIN_ID = 4663;
 export const BASE_CHAIN_ID = 8453;
+export const ANVIL_CHAIN_ID = 31337;
+
+/** Local anvil fork support — opt-in so prod builds never list it. */
+export const ANVIL_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ANVIL === '1';
 
 // Env-sourced RPCs. Fall back to a public/placeholder so dev never crashes.
 const RPC_ROBINHOOD =
   process.env.NEXT_PUBLIC_RPC_ROBINHOOD ?? 'https://rpc.mainnet.chain.robinhood.com'
 const RPC_BASE = process.env.NEXT_PUBLIC_RPC_BASE ?? 'https://mainnet.base.org';
+export const RPC_ANVIL = process.env.NEXT_PUBLIC_RPC_ANVIL ?? 'http://127.0.0.1:8545';
 
 // Placeholder mock stock tokens per chain (tickers mirror MockStockToken.sol).
 const MOCK_STOCKS: Record<string, Address> = {
@@ -51,6 +56,7 @@ const MOCK_STOCKS: Record<string, Address> = {
 
 const robinhoodDeployments = deploymentsFor(ROBINHOOD_CHAIN_ID);
 const baseDeployments = deploymentsFor(BASE_CHAIN_ID);
+const anvilDeployments = deploymentsFor(ANVIL_CHAIN_ID);
 
 export const CHAINS: Record<number, ChainConfig> = {
   [ROBINHOOD_CHAIN_ID]: {
@@ -85,9 +91,36 @@ export const CHAINS: Record<number, ChainConfig> = {
   },
 };
 
+if (ANVIL_ENABLED) {
+  CHAINS[ANVIL_CHAIN_ID] = {
+    id: ANVIL_CHAIN_ID,
+    name: 'Anvil (local)',
+    primary: false,
+    rpcUrl: RPC_ANVIL,
+    explorerUrl: 'http://127.0.0.1:8545',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    wethAddress: anvilDeployments.weth,
+    oracleAddress: anvilDeployments.oracle,
+    stockTokens:
+      Object.keys(anvilDeployments.stockTokens).length > 0
+        ? anvilDeployments.stockTokens
+        : MOCK_STOCKS,
+    entropyKind: 'miner',
+    deployments: anvilDeployments,
+  };
+}
+
 export const PRIMARY_CHAIN = CHAINS[ROBINHOOD_CHAIN_ID];
 export const FALLBACK_CHAIN = CHAINS[BASE_CHAIN_ID];
-export const SUPPORTED_CHAIN_IDS = [ROBINHOOD_CHAIN_ID, BASE_CHAIN_ID] as const;
+export const SUPPORTED_CHAIN_IDS: (
+  | typeof ROBINHOOD_CHAIN_ID
+  | typeof BASE_CHAIN_ID
+  | typeof ANVIL_CHAIN_ID
+)[] = [
+  ROBINHOOD_CHAIN_ID,
+  BASE_CHAIN_ID,
+  ...(ANVIL_ENABLED ? ([ANVIL_CHAIN_ID] as const) : []),
+];
 
 export function getChain(chainId: number | undefined): ChainConfig | undefined {
   return chainId == null ? undefined : CHAINS[chainId];

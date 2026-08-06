@@ -1,15 +1,173 @@
 'use client';
 
-import { useState } from 'react';
-import { PageHeader, Section, EmptyState, Stat, TodoTag } from '@/components/ui';
+import { useEffect, useState } from 'react';
+import { useAccount, usePublicClient } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
+import { formatEther, type Address } from 'viem';
+import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
+import { readMany, safeRead, useContracts, useRead } from '@/lib/contracts';
+import { useTx } from '@/lib/useTx';
+import { useMyBossIds } from '@/lib/bosses';
+import { isDeployed } from '@/lib/deployments';
+import { countdown } from '@/lib/format';
 
 /**
- * Loans — borrow against a position, repay to reclaim it.
- * All figures are placeholders; wire to the loans module reads/writes.
+ * Loans — borrow PIT against a Boss, repay to reclaim it.
+ * - quoteFee over a 3-90 day term slider
+ * - borrow: approve the Boss NFT to the vault, then borrow (fee in ETH)
+ * - my loans: nextLoanId iteration filtered by borrower, repay with late fee,
+ *   countdown to dueAt
  */
+
+const DAY = 86_400;
+
+type Loan = {
+  loanId: bigint;
+  bossId: bigint;
+  principal: bigint;
+  ethNotional: bigint;
+  startAt: bigint;
+  dueAt: bigint;
+  closed: boolean;
+  lateFee: bigint;
+};
+
+function useMyLoans() {
+  const { address } = useAccount();
+  const { c, chainId } = useContracts();
+  const client = usePublicClient();
+  return useQuery({
+    queryKey: ['myLoans', chainId, address ?? '0x0'],
+    enabled: Boolean(client && address && isDeployed(c.loanVault.address)),
+    refetchInterval: 20_000,
+    queryFn: async (): Promise<Loan[]> => {
+      const next = (await safeRead(client, c.loanVault, 'nextLoanId')) as bigint | null;
+      if (next == null || next === 0n) return [];
+      // Loan ids are assigned sequentially from nextLoanId; scan 0..next.
+      const n = Math.min(Number(next) + 1, 2000);
+      const ids = Array.from({ length: n }, (_, i) => BigInt(i));
+      const raw = (await readMany(
+        client,
+        ids.map((id) => ({
+          address: c.loanVault.address,
+          abi: c.loanVault.abi,
+          functionName: 'loans',
+          args: [id] as const,
+        })),
+      )) as (readonly unknown[] | null)[];
+      const me = address!.toLowerCase();
+      const mine = ids.filter((_, i) => {
+        const borrower = raw[i]?.[0];
+        return typeof borrower === 'string' && borrower.toLowerCase() === me;
+      });
+      const fees = (await readMany(
+        client,
+        mine.map((id) => ({
+          address: c.loanVault.address,
+          abi: c.loanVault.abi,
+          functionName: 'lateFee',
+          args: [id] as const,
+        })),
+      )) as (bigint | null)[];
+      return mine.map((loanId, j) => {
+        const s = raw[Number(loanId)]!;
+        return {
+          loanId,
+          bossId: (s[1] as bigint | undefined) ?? 0n,
+          principal: (s[2] as bigint | undefined) ?? 0n,
+          ethNotional: (s[3] as bigint | undefined) ?? 0n,
+          startAt: BigInt((s[4] as bigint | number | undefined) ?? 0),
+          dueAt: BigInt((s[5] as bigint | number | undefined) ?? 0),
+          closed: Boolean(s[6]),
+          lateFee: fees[j] ?? 0n,
+        };
+      });
+    },
+  });
+}
+
 export default function LoansPage() {
-  const [tab, setTab] = useState<'borrow' | 'repay'>('borrow');
+  const { isConnected, address } = useAccount();
+  const { c } = useContracts();
+  const client = usePublicClient();
+  const { send, approveIfNeeded, busy } = useTx();
+  const deployed = isDeployed(c.loanVault.address);
+
+  const [term, setTerm] = useState(30); // days
+  const [bossId, setBossId] = useState('');
+
+  const principalPit = useRead<bigint>({ contract: c.loanVault, functionName: 'principalPit' });
+  const aprBps = useRead<bigint>({ contract: c.loanVault, functionName: 'APR_BPS' });
+  const quote = useRead<readonly [bigint, bigint]>({
+    contract: c.loanVault,
+    functionName: 'quoteFee',
+    args: [BigInt(term * DAY)],
+    refetchInterval: 30_000,
+  });
+
+  const bosses = useMyBossIds();
+  const loans = useMyLoans();
+  const openLoans = (loans.data ?? []).filter((l) => !l.closed);
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const bossIdOk = /^\d+$/.test(bossId.trim());
+
+  async function onBorrow() {
+    if (!bossIdOk || quote.data == null) return;
+    const id = BigInt(bossId.trim());
+    // Step 1: approve the vault to pull the Boss NFT (collateral).
+    const approved = await send(
+      {
+        address: c.pitBoss.address,
+        abi: c.pitBoss.abi,
+        functionName: 'approve',
+        args: [c.loanVault.address, id],
+      },
+      { title: `Approve Boss #${bossId.trim()}` },
+    );
+    if (!approved) return;
+    // Step 2: borrow — fee is paid in ETH.
+    await send(
+      {
+        address: c.loanVault.address,
+        abi: c.loanVault.abi,
+        functionName: 'borrow',
+        args: [id, BigInt(term * DAY)],
+        value: quote.data[0],
+      },
+      { title: `Borrow against #${bossId.trim()}` },
+    );
+  }
+
+  async function onRepay(loan: Loan) {
+    if (!address) return;
+    // Step 1: approve PIT principal back to the vault.
+    const ok = await approveIfNeeded(
+      c.pit.address as Address,
+      address,
+      c.loanVault.address,
+      loan.principal,
+    );
+    if (!ok) return;
+    // Step 2: repay, sending a freshly-read late fee (ETH) when overdue.
+    const fee = (await safeRead(client, c.loanVault, 'lateFee', [loan.loanId])) as bigint | null;
+    await send(
+      {
+        address: c.loanVault.address,
+        abi: c.loanVault.abi,
+        functionName: 'repay',
+        args: [loan.loanId],
+        value: fee ?? loan.lateFee,
+      },
+      { title: `Repay loan #${loan.loanId.toString()}` },
+    );
+  }
 
   return (
     <ChainGuard>
@@ -17,58 +175,165 @@ export default function LoansPage() {
         eyebrow="Loans"
         title="Borrow against it."
         emphasis="Keep your streak."
-        lede="Put your position to work without selling it. Borrow, repay, reclaim. No custody, no middleman."
+        lede="Put your Boss to work without selling it. Borrow PIT, repay, reclaim. No custody, no middleman."
       />
 
-      <Section label="Position" title="Your" emphasis="numbers.">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Collateral" value="—" sub="TODO: position value" />
-          <Stat label="Borrowed" value="—" sub="TODO: debt read" />
-          <Stat label="Health factor" value="—" sub="TODO: liquidation math" />
-          <Stat label="Borrow APR" value="—" sub="TODO: rate read" />
-        </div>
-      </Section>
-
-      <Section label="Act" title="Borrow" emphasis="or repay.">
-        <div className="card max-w-xl">
-          <div className="grid grid-cols-2 gap-2">
-            {(['borrow', 'repay'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`rounded-xl border px-4 py-3 text-sm capitalize ${
-                  tab === t ? 'border-lime text-lime' : 'border-line text-mute hover:text-paper'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-
-          <label className="mt-4 block">
-            <span className="eyebrow">{tab === 'borrow' ? 'Borrow amount' : 'Repay amount'}</span>
-            <input
-              inputMode="decimal"
-              placeholder="0.0"
-              className="data mt-1 w-full rounded-xl border border-line bg-black/40 px-4 py-3 text-sm"
+      <Section label="Vault" title="The" emphasis="numbers.">
+        {!deployed ? (
+          <EmptyState
+            title="Not deployed"
+            hint="The LoanVault has no address on this chain yet. Quotes, borrowing and repayment go live here once deployments land."
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Loan principal"
+              value={principalPit.data != null ? formatEther(principalPit.data) : '…'}
+              sub="PIT per loan"
             />
-          </label>
-
-          <button className="pill-lime mt-4 w-full">
-            {tab === 'borrow' ? 'Borrow' : 'Repay'}
-          </button>
-          <div className="mt-3">
-            <TodoTag>{tab === 'borrow' ? 'Loans.borrow()' : 'Loans.repay()'}</TodoTag>
+            <Stat
+              label="APR"
+              value={aprBps.data != null ? `${(Number(aprBps.data) / 100).toFixed(2)}%` : '…'}
+              sub="pro-rated by term"
+            />
+            <Stat
+              label="Fee for term"
+              value={quote.data != null ? `Ξ${formatEther(quote.data[0])}` : '…'}
+              sub={`${term} days, paid upfront`}
+            />
+            <Stat
+              label="ETH notional"
+              value={quote.data != null ? `Ξ${formatEther(quote.data[1])}` : '…'}
+              sub="principal value in ETH"
+            />
           </div>
-        </div>
+        )}
       </Section>
+
+      {deployed ? (
+        <Section label="Borrow" title="Take the" emphasis="loan.">
+          <div className="card max-w-xl">
+            <label className="block">
+              <span className="eyebrow">
+                Term · <span className="data text-lime">{term} days</span>
+              </span>
+              <input
+                type="range"
+                min={3}
+                max={90}
+                value={term}
+                onChange={(e) => setTerm(Number(e.target.value))}
+                className="mt-2 w-full accent-lime"
+              />
+              <div className="data mt-1 flex justify-between text-[11px] text-mute">
+                <span>3d</span>
+                <span>90d</span>
+              </div>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="eyebrow">Collateral Boss id</span>
+              {bosses.data && bosses.data.length > 0 ? (
+                <select
+                  value={bossId}
+                  onChange={(e) => setBossId(e.target.value)}
+                  className="data mt-1 w-full rounded-xl border border-line bg-black/40 px-4 py-3 text-sm"
+                >
+                  <option value="">Select a Boss…</option>
+                  {bosses.data.map((id) => (
+                    <option key={id.toString()} value={id.toString()}>
+                      Boss #{id.toString()}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={bossId}
+                  onChange={(e) => setBossId(e.target.value)}
+                  placeholder="Boss id"
+                  inputMode="numeric"
+                  className="data mt-1 w-full rounded-xl border border-line bg-black/40 px-4 py-3 text-sm"
+                />
+              )}
+            </label>
+
+            <p className="mt-3 text-xs text-mute">
+              Two transactions: approve the Boss NFT to the vault, then borrow. The Boss is held as
+              collateral until repayment.
+            </p>
+
+            <button
+              onClick={onBorrow}
+              disabled={!isConnected || busy || !bossIdOk || quote.data == null}
+              className="pill-lime mt-4 w-full disabled:opacity-50"
+            >
+              {!isConnected
+                ? 'Connect to borrow'
+                : `Borrow ${principalPit.data != null ? formatEther(principalPit.data) : ''} PIT`}
+            </button>
+          </div>
+        </Section>
+      ) : null}
 
       <Section label="History" title="Your" emphasis="loans.">
-        <EmptyState
-          title="No loans yet"
-          hint="Open and past loans, their rates and repayment status show here."
-          todo="Loans.loansOf(you)"
-        />
+        {!isConnected ? (
+          <EmptyState
+            title="Connect to see your loans"
+            hint="Open and past loans, their fees and repayment status show here."
+          />
+        ) : !deployed ? (
+          <EmptyState title="Not deployed" hint="The LoanVault has no address on this chain yet." />
+        ) : loans.isLoading ? (
+          <p className="data text-sm text-mute">Scanning loans…</p>
+        ) : !loans.data || loans.data.length === 0 ? (
+          <EmptyState
+            title="No loans yet"
+            hint="Borrow against a Boss above — the loan, its due date and repayment controls show here."
+          />
+        ) : (
+          <div className="grid gap-3">
+            {loans.data.map((l) => {
+              const dueMs = Number(l.dueAt) * 1000;
+              const cd = countdown(dueMs, now);
+              const overdue = !l.closed && dueMs <= now;
+              return (
+                <div key={l.loanId.toString()} className="card">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="data text-sm">
+                        Loan #{l.loanId.toString()} · Boss #{l.bossId.toString()} ·{' '}
+                        {formatEther(l.principal)} PIT
+                      </p>
+                      <p className="mt-1 text-xs text-mute">
+                        {l.closed ? (
+                          'closed'
+                        ) : overdue ? (
+                          <span className="text-red-300">
+                            overdue · late fee Ξ{formatEther(l.lateFee)}
+                          </span>
+                        ) : (
+                          `due in ${cd.days}d ${cd.hours}h ${cd.minutes}m ${cd.seconds}s`
+                        )}
+                      </p>
+                    </div>
+                    {!l.closed ? (
+                      <button
+                        onClick={() => onRepay(l)}
+                        disabled={busy}
+                        className="pill-lime disabled:opacity-50"
+                      >
+                        Repay {formatEther(l.principal)} PIT
+                        {l.lateFee > 0n ? ` + Ξ${formatEther(l.lateFee)}` : ''}
+                      </button>
+                    ) : (
+                      <span className="chip">repaid</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
     </ChainGuard>
   );
