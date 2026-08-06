@@ -12,7 +12,7 @@ import {IPitBoss} from "../interfaces/Support.sol";
 /// @notice The fixed-supply collection at the heart of the floor. Every token
 ///         gets an ERC-6551 token-bound account (TBA) created and initialized
 ///         atomically at mint via the InitializingRegistry.
-/// @dev    [CONFIG: MAX_SUPPLY = 4,200]. Owner surface is limited to metadata and
+/// @dev    [CONFIG: MAX_SUPPLY = 888]. Owner surface is limited to metadata and
 ///         the mint minter role; it can never touch a TBA's balance. Activation
 ///         state (held elsewhere) is cleared on true ownership transfer, which is
 ///         detected via the `transferEpoch` counter bumped in `_update`.
@@ -20,7 +20,7 @@ contract PitBoss is ERC721, ERC2981, Ownable, IPitBoss {
     using Strings for uint256;
 
     /// @notice Hard cap on Bosses. [CONFIG]
-    uint256 public constant MAX_SUPPLY = 4200;
+    uint256 public constant MAX_SUPPLY = 888;
 
     InitializingRegistry public immutable registry;
 

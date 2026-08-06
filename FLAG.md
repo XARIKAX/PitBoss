@@ -26,7 +26,7 @@ value in one place; the deploy script and frontend read from these.
 | Config | Value used | Where |
 |---|---|---|
 | `$PIT` total supply | **42,000,000** × 1e18 (fixed, no mint) | `PIT.INITIAL_SUPPLY` |
-| PitBoss max supply | **4,200** | `PitBoss.MAX_SUPPLY` |
+| PitBoss max supply | **888** | `PitBoss.MAX_SUPPLY` |
 | AMM flat price | **500,000 $PIT** per Boss | `FlatAMMVault.PRICE_PIT` |
 | AMM buy fee (next) | **0.002 ETH** | `FlatAMMVault.buyFee` |
 | AMM snipe fee (specific id) | **0.006 ETH** | `FlatAMMVault.snipeFee` |
@@ -107,7 +107,7 @@ expects real oracle/router/stock addresses via env (`USE_MOCKS=false`).
 
 1. **House Book crank is O(1).** The brief's "pot swaps into each elected token in
    one pass" is realized as a per-Boss conversion at `deliver()` time, not a single
-   giant crank-time swap. Rationale: crank must be gas-bounded across up to 4,200
+   giant crank-time swap. Rationale: crank must be gas-bounded across up to 888
    Bosses; per-Boss delivery also isolates slippage. The crank distributes ETH pro
    rata via an accumulator; `deliver()` converts each Boss's share into its elected
    token(s) with per-swap slippage caps and pushes to the TBA.

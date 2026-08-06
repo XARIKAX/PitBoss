@@ -14,7 +14,7 @@ const MODULES = [
     tag: 'LIVE',
     href: '/floor',
     title: 'The Floor',
-    body: '4,200 Bosses, each with its own onchain wallet. Activate one and every fee on the floor pays you — in the stock you elect.',
+    body: '888 Bosses, each with its own onchain wallet. Activate one and every fee on the floor pays you — in the stock you elect.',
   },
   {
     tag: 'LIVE',
@@ -128,7 +128,7 @@ export default function Home() {
                 {[
                   { l: 'House Book', v: '$2.41M', s: 'total accrued' },
                   { l: 'Edge', v: '10%', s: 'RTP 90%' },
-                  { l: 'Bosses', v: '4,200', s: 'fixed supply' },
+                  { l: 'Bosses', v: '888', s: 'fixed supply' },
                   { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
                 ].map((x) => (
                   <div key={x.l} className="panel-raised px-4 py-3.5">
