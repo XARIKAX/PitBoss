@@ -17,6 +17,7 @@ import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import sharp from 'sharp';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(ROOT, 'output');
@@ -108,7 +109,12 @@ for await (const line of rl) {
     skipped++;
     continue;
   }
-  const buf = await withRetry(() => generate(prompt, id));
+  const raw = await withRetry(() => generate(prompt, id));
+  // Enforce the template's chunky-pixel look regardless of model compliance:
+  // downscale to a coarse grid, quantize the palette, nearest-upscale.
+  const GRID = 96;
+  const small = await sharp(raw).resize(GRID, GRID, { kernel: 'lanczos3' }).png({ palette: true, colors: 48 }).toBuffer();
+  const buf = await sharp(small).resize(1024, 1024, { kernel: 'nearest' }).png().toBuffer();
   writeFileSync(file, buf);
   done++;
   console.log(`generated #${id} (${done} new, ${skipped} skipped)`);

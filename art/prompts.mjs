@@ -111,11 +111,12 @@ const TRAITS = {
 };
 
 const STYLE =
-  'Retro pixel art portrait, painterly pixel style with visible chunky pixels and soft shading, ' +
-  'bust composition of a mafia pit boss from the chest up, centered, facing forward. ';
+  'Pixel art. Retro video game pixel art portrait, chunky visible square pixels, limited color palette, ' +
+  'painterly pixel shading. Bust composition of a mafia pit boss from the chest up, perfectly centered, ' +
+  'symmetrical, facing forward, head in the middle of the frame. ';
 const QUALITY =
-  ' Serious composed expression, dramatic low-key lighting, rich muted colors, high detail pixel art, ' +
-  'no text, no watermark, square format.';
+  ' Serious composed expression, dramatic low-key lighting, rich muted colors, detailed pixel art ' +
+  'sprite, no text, no watermark, square format.';
 
 function buildPrompt(combo) {
   const parts = [
