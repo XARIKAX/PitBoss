@@ -8,6 +8,10 @@ contract HouseBookTest is TestBase {
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
 
+    /// @dev Tests call book.crank() directly, so this contract receives the
+    ///      cranker tip — it must accept ETH.
+    receive() external payable {}
+
     function setUp() public {
         deploySystem();
     }
@@ -46,6 +50,11 @@ contract HouseBookTest is TestBase {
         vm.deal(address(this), 10 ether);
         book.payFee{value: 5 ether}(IHouseBook.Source.PitEdge);
 
+        // The two buyBoss calls above also paid AMM buy fees into the book, so
+        // the bar is 5 ETH + 2*buyFee. The crank must sweep exactly the bar.
+        uint256 barBefore = book.bar();
+        assertEq(barBefore, 5 ether + 2 * amm.buyFee(), "bar == fees + AMM buy fees");
+
         uint256 balBefore = address(book).balance;
         address cranker = makeAddr("cranker");
         uint256 crankerBefore = cranker.balance;
@@ -53,8 +62,8 @@ contract HouseBookTest is TestBase {
         vm.prank(cranker);
         (uint256 pot, uint256 tip) = book.crank();
 
-        assertEq(pot, 5 ether, "pot == bar");
-        assertEq(tip, (5 ether * book.crankTipBps()) / 10_000, "tip is 0.5%");
+        assertEq(pot, barBefore, "pot == bar");
+        assertEq(tip, (barBefore * book.crankTipBps()) / 10_000, "tip is 0.5%");
         assertEq(cranker.balance - crankerBefore, tip, "cranker got the tip");
 
         // Conservation: tip left; the rest is bar + owed still held.

@@ -117,7 +117,13 @@ contract DegenRollTest is TestBase {
             uint256 rid = machine.buy{value: 0.01 ether}(DegenRoll.Lane.Instant);
             conductor.presetWord(_entropyId(rid), 0); // floor every time
             vm.warp(block.timestamp + 1 minutes);
+            assertTrue(
+                conductor.isReady(_entropyId(rid)),
+                string.concat("conductor not ready at iter ", vm.toString(i), " round ", vm.toString(rid))
+            );
+            uint256 count = machine.streakCount(player);
             machine.settle(rid);
+            assertEq(machine.streakCount(player), i == 4 ? 0 : count + 1, "streak count tracks");
         }
         assertEq(cert.totalSupply(), certsBefore + 1, "rebate certificate minted");
     }
