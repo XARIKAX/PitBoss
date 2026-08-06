@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "corepack enable",
-  "buildCommand": "corepack enable && cd apps/web && pnpm install --no-frozen-lockfile && pnpm build",
+  "installCommand": "cd apps/web && npm install --legacy-peer-deps --no-audit --no-fund",
+  "buildCommand": "cd apps/web && npm run build",
   "outputDirectory": "apps/web/out",
   "trailingSlash": true
 }
