@@ -28,27 +28,41 @@ layers/<NN_Category>/<Trait Name#WEIGHT>.png
 - Optional `layers/99_Legendary/*.png`: full-canvas 1/1s that replace the
   composite entirely and are spread deterministically through the ids.
 
-## Trait plan to hand an artist (matches the banner style)
+## Template style spec (from the reference PFP in `art/reference/`)
+
+The canonical template is a **bust portrait**: head + shoulders, centered,
+cropped at the chest. Match it exactly:
+
+- Flat single-color background (template: muted maroon `#8a4a4f`-ish).
+- 1px black pixel outline around the figure; soft painterly-pixel shading
+  inside (2–3 shade steps per material), not hard dithering.
+- ~56–64px working grid for the figure, generous headroom above the hair.
+- Muted, warm palette: desaturated suit colors, cream shirt, natural skin
+  tones. Gold accents reserved for rare traits.
+- Serious, composed expressions — these are bosses, not memes.
+
+## Trait plan to hand an artist (bust format)
 
 Target ≥3,000 combinations so 888 stays collision-light. Suggested sheet:
 
-| # | Category | Count | Ideas from the banner art |
+| # | Category | Count | Ideas (template + banner cast) |
 |---|---|---|---|
-| 00 | Background | 6 | vault green, casino red, amber room, felt table, neon lime, gold glow |
-| 01 | Body | 5 | skin tones from the seven table Bosses |
-| 02 | Suit | 8 | boss green, purple don, pinstripe, tux, robe, tracksuit, gold-trim (rare) |
-| 03 | Head | 8 | none, fedora, green hair, orange hair, blue hair, slick-back, crown (rare), red nose+shades combo |
-| 04 | Eyes | 6 | straight, shades, glasses, wink, closed-smug, purple (rare) |
-| 05 | Mouth/Face | 5 | neutral, smirk, cigarette, cigar, gold tooth |
-| 06 | Accessory | 7 | none, gold chain, whiskey glass, gold bar, cash stack, phone, pistol* |
-| 99 | Legendary | 3–8 | 1/1 full scenes (the seated boss in the chair, etc.) |
+| 00 | Background | 7 | maroon (template), vault green, casino navy, amber, charcoal, felt green, lime neon (rare) |
+| 01 | Skin | 5 | the banner cast's five tones |
+| 02 | Suit | 8 | dark green (template), purple don, pinstripe, tux w/ bowtie, charcoal, camel, white (rare), gold-trim (rare) |
+| 03 | Shirt/Tie | 6 | cream shirt + tie (template), black shirt, turtleneck, open collar, ascot, gold chain over shirt |
+| 04 | Hair/Hat | 9 | slick-back (template), green/orange/blue hair, buzz, fedora, homburg, crown (rare), bald |
+| 05 | Eyes | 6 | composed side-glance (template), straight, shades, glasses, wink, purple (rare) |
+| 06 | Mouth | 5 | neutral (template), smirk, cigarette, cigar, gold tooth |
+| 07 | Extra | 6 | none, pocket square (template), lapel pin, earpiece, scar, smoke wisp |
+| 99 | Legendary | 3–8 | 1/1s: the seated boss in the chair, the full table scene, etc. |
 
-*Review the pistol/weapon trait against marketplace content policies before
-including it.
-
-That's 6×5×8×8×6×5×7 ≈ 400k combos — plenty. Give the artist the reference
+That's 7×5×8×6×9×6×5×6 ≈ 2.7M combos — plenty. Give the artist the reference
 image in `art/reference/` plus this table; ask for a layered file (Aseprite/PS)
-exported per-trait as transparent PNGs named per the convention.
+exported per-trait as transparent PNGs named per the convention. Categories
+composite back-to-front exactly in the numbered order above (suit before
+shirt/tie so collars overlay, hair after eyes never occludes them, etc. —
+adjust NN prefixes if the artist's layering differs).
 
 Style-matched AI options for drafting layers: Retro Diffusion (pixel-art
 model), or Midjourney with `--sref <template>`; clean results in Aseprite.
