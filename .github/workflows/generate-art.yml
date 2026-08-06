@@ -1,14 +1,18 @@
 name: Generate Art
 
 # Renders the 888 PitBosses via AI batch generation (painterly-pixel template
-# style). Sharded 4-way; a final job merges, ingests (metadata, rarity,
-# provenance, preview) and uploads the complete collection artifact.
+# style, plain flat backgrounds). SINGLE sequential job: this account is
+# allocated one runner at a time, so matrix shards starve each other — one job
+# generating 1..888 in order is the shape that actually finishes.
 #
 # Providers (auto-selected in art/generate-ai.mjs):
 #   - FREE default: pollinations.ai (FLUX) — no secret needed, rate-limited
-#     (~6s/image => full 888 ≈ 25 min per shard, 4 shards).
+#     (~6.5s/image => full 888 ≈ 100 min).
 #   - OPENAI_API_KEY secret set -> gpt-image-1 (~$55 for 888, tighter style control).
 #   - RETRO_DIFFUSION_KEY secret set -> pixel-art-native model.
+#
+# The first 8 images are committed to art/samples/ early so previews land in
+# the repo within minutes; the full set commits to art/collection/ at the end.
 # Test with a small range first: set from/to inputs (e.g. 1..8).
 
 permissions:
@@ -26,12 +30,14 @@ on:
         required: true
         default: "888"
 
+concurrency:
+  group: generate-art
+  cancel-in-progress: false
+
 jobs:
-  shard:
+  generate:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        shard: [0, 1, 2, 3]
+    timeout-minutes: 350
     defaults:
       run:
         working-directory: art
@@ -43,65 +49,47 @@ jobs:
       - run: npm install
       - name: Build prompts
         run: node prompts.mjs
-      - name: Generate shard ${{ matrix.shard }}
+
+      - name: Generate first 8 (early samples)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RETRO_DIFFUSION_KEY: ${{ secrets.RETRO_DIFFUSION_KEY }}
         run: |
           FROM=${{ inputs.from }}
           TO=${{ inputs.to }}
-          COUNT=$(( TO - FROM + 1 ))
-          PER=$(( (COUNT + 3) / 4 ))
-          S_FROM=$(( FROM + PER * ${{ matrix.shard }} ))
-          S_TO=$(( S_FROM + PER - 1 ))
-          if [ $S_TO -gt $TO ]; then S_TO=$TO; fi
-          if [ $S_FROM -gt $TO ]; then echo "shard empty"; exit 0; fi
-          echo "shard ${{ matrix.shard }}: $S_FROM..$S_TO"
-          node generate-ai.mjs --from $S_FROM --to $S_TO
-      - uses: actions/upload-artifact@v4
-        with:
-          name: images-shard-${{ matrix.shard }}
-          path: art/output/images
-          if-no-files-found: ignore
+          SAMPLE_TO=$(( FROM + 7 ))
+          if [ $SAMPLE_TO -gt $TO ]; then SAMPLE_TO=$TO; fi
+          node generate-ai.mjs --from $FROM --to $SAMPLE_TO
 
-  ingest:
-    needs: shard
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: art
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install
-      - name: Build prompts (traits.json)
-        run: node prompts.mjs
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: images-shard-*
-          path: art/output/images
-          merge-multiple: true
+      - name: Commit early samples
+        run: |
+          rm -rf samples && mkdir -p samples
+          cp output/images/*.png samples/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cd ..
+          git add art/samples
+          git commit -m "Art: early sample previews (run ${{ github.run_id }})" || echo "nothing to commit"
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push || echo "push failed (non-fatal)"
+
+      - name: Generate remaining range
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RETRO_DIFFUSION_KEY: ${{ secrets.RETRO_DIFFUSION_KEY }}
+        run: node generate-ai.mjs --from ${{ inputs.from }} --to ${{ inputs.to }}
+
       - name: Ingest (metadata, rarity, provenance, preview)
         run: |
-          ls output/images | wc -l
+          COUNT=$(ls output/images | wc -l)
+          echo "images: $COUNT"
           # Partial ranges: ingest only when the full set is present.
-          if [ "$(ls output/images | wc -l)" -eq 888 ]; then
+          if [ "$COUNT" -eq 888 ]; then
             node ingest.mjs
           else
-            echo "partial set — skipping full ingest (preview only)"
+            echo "partial set — skipping full ingest"
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pitbosses-collection
-          path: |
-            art/output/images
-            art/output/metadata
-            art/output/rarity.json
-            art/output/provenance.json
-            art/output/preview.png
-          if-no-files-found: warn
+
       - name: Commit results to the repo
         run: |
           COUNT=$(ls output/images 2>/dev/null | wc -l)
@@ -119,8 +107,8 @@ jobs:
             git pull --rebase origin ${{ github.ref_name }} || true
             git push || echo "push failed (non-fatal)"
           elif [ "$COUNT" -gt 0 ] && [ "$COUNT" -le 16 ]; then
-            mkdir -p samples
-            cp output/images/* samples/
+            rm -rf samples && mkdir -p samples
+            cp output/images/*.png samples/
             cd ..
             git add art/samples
             git commit -m "Art: sample batch previews (run ${{ github.run_id }})" || echo "nothing to commit"
@@ -129,3 +117,14 @@ jobs:
           else
             echo "count=$COUNT — partial set, artifact only"
           fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pitbosses-collection
+          path: |
+            art/output/images
+            art/output/metadata
+            art/output/rarity.json
+            art/output/provenance.json
+            art/output/preview.png
+          if-no-files-found: warn
