@@ -41,13 +41,13 @@ function makeRng(seedStr) {
  */
 const TRAITS = {
   Background: [
-    { v: 'Amber Glow', w: 24, p: 'deep brown background with a warm radial amber glow behind the head' },
-    { v: 'Vault Green', w: 18, p: 'near-black background with a muted green radial glow behind the head' },
-    { v: 'Casino Maroon', w: 18, p: 'dark maroon background with a soft crimson radial glow behind the head' },
-    { v: 'Midnight Blue', w: 14, p: 'midnight blue background with a cold steel-blue radial glow behind the head' },
-    { v: 'Smoke Grey', w: 14, p: 'charcoal grey background with a faint silver radial glow behind the head' },
-    { v: 'Royal Purple', w: 8, p: 'dark violet background with a rich purple radial glow behind the head' },
-    { v: 'Lime Neon', w: 4, p: 'black background with an electric lime-green radial glow behind the head' },
+    { v: 'Dusty Rose', w: 22, p: 'plain flat dusty-rose background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Slate Blue', w: 22, p: 'plain flat slate-blue background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Sage Green', w: 16, p: 'plain flat sage-green background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Warm Sand', w: 14, p: 'plain flat warm sand-beige background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Smoke Grey', w: 12, p: 'plain flat smoke-grey background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Dusty Violet', w: 10, p: 'plain flat dusty-violet background, one solid muted color, no gradient, no glow, no scenery' },
+    { v: 'Lime', w: 4, p: 'plain flat muted lime-green background, one solid color, no gradient, no glow, no scenery' },
   ],
   Skin: [
     { v: 'Tan', w: 22, p: 'tan skin' },
