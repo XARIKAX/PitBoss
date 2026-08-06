@@ -1,27 +1,17 @@
 import type { Metadata } from 'next';
-import { Instrument_Serif, Instrument_Sans, IBM_Plex_Mono } from 'next/font/google';
+import { IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
-import { Nav } from '@/components/Nav';
+import { AppShell } from '@/components/shell/AppShell';
 import { Footer } from '@/components/Footer';
 import { Ticker } from '@/components/Ticker';
 
-const serif = Instrument_Serif({
-  weight: '400',
-  style: ['normal', 'italic'],
-  subsets: ['latin'],
-  variable: '--font-serif',
-  display: 'swap',
-});
-
-const sans = Instrument_Sans({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
+/**
+ * Terminal design system: IBM Plex Mono everywhere. One family, four weights —
+ * hierarchy comes from size, case, tracking, and color, not typeface changes.
+ */
 const mono = IBM_Plex_Mono({
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   variable: '--font-mono',
   display: 'swap',
@@ -35,12 +25,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
-      <body className="min-h-screen bg-black text-paper antialiased">
+    <html lang="en" className={mono.variable}>
+      <body className="min-h-screen text-paper antialiased">
         <Providers>
-          <Nav />
-          <main className="pb-16">{children}</main>
-          <Footer />
+          <AppShell>
+            {children}
+            <Footer />
+          </AppShell>
           <Ticker />
         </Providers>
       </body>

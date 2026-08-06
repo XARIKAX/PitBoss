@@ -88,8 +88,8 @@ export function Markdown({ source }: { source: string }) {
         level === 1
           ? 'headline mt-2 text-3xl'
           : level === 2
-            ? 'font-serif text-2xl mt-8'
-            : 'font-serif text-xl mt-6';
+            ? 'headline text-lg mt-8'
+            : 'headline text-[15px] mt-6';
       blocks.push(
         React.createElement(`h${Math.min(level, 4)}`, { key: k++, className: cls }, content),
       );

@@ -11,7 +11,7 @@ export function OddsTable({ ticket, compact = false }: { ticket?: number; compac
   const rows = compact ? PRIZE_TABLE.slice(0, 8) : PRIZE_TABLE;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line">
+    <div className="overflow-x-auto rounded-[7px] border border-line">
       <table className="data w-full min-w-[380px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-mute">

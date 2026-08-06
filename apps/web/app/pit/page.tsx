@@ -87,7 +87,7 @@ export default function PitPage() {
           {/* Ticket buy + lane + roll */}
           <div className="card">
             <div className="flex items-center justify-between">
-              <p className="font-serif text-lg">Ticket</p>
+              <p className="headline text-[14px]">Ticket</p>
               <EntropyBadge state={machine.entropy} />
             </div>
 
@@ -156,7 +156,7 @@ export default function PitPage() {
         <div id="bankroll" className="grid gap-4 lg:grid-cols-[1fr_1fr]">
           <div className="card">
             <div className="flex items-center justify-between">
-              <p className="font-serif text-lg">Stake · {machine.ticker}</p>
+              <p className="headline text-[14px]">Stake · {machine.ticker}</p>
               <span className="data text-sm text-lime">APR {machine.apr}</span>
             </div>
             <p className="mt-2 text-sm text-mute">

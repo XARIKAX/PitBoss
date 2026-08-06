@@ -1,10 +1,13 @@
 /**
- * Small shared presentational primitives used across the app routes.
- * Kept server-safe (no hooks) so any page can import them.
+ * Shared presentational primitives — terminal-trading design system.
+ * Server-safe (no hooks) so any page can import them.
  */
 import Link from 'next/link';
 
-/** Page header with mono eyebrow, serif headline (lime emphasis words), lede. */
+/**
+ * Page header: dashed lime frame, bold uppercase mono title with a blinking
+ * terminal cursor, one-line sub. The signature move of the design.
+ */
 export function PageHeader({
   eyebrow,
   title,
@@ -12,25 +15,29 @@ export function PageHeader({
   lede,
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   emphasis?: string;
   lede?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <header className="shell pt-14">
-      <p className="eyebrow">{eyebrow}</p>
-      <h1 className="headline mt-3 text-section text-balance">
-        {title} {emphasis ? <span className="em">{emphasis}</span> : null}
-      </h1>
-      {lede ? <p className="mt-4 max-w-2xl text-mute">{lede}</p> : null}
-      {children ? <div className="mt-6">{children}</div> : null}
+    <header className="shell pt-6">
+      <div className="dashed bg-ink/60 px-6 py-5">
+        {eyebrow ? <p className="label-lime mb-1.5">{eyebrow}</p> : null}
+        <h1 className="headline text-h1">
+          {title}
+          {emphasis ? <span className="em"> {emphasis}</span> : null}
+          <span className="cursor" aria-hidden />
+        </h1>
+        {lede ? <p className="mt-2 max-w-3xl text-[13px] text-mute">{lede}</p> : null}
+        {children ? <div className="mt-4">{children}</div> : null}
+      </div>
     </header>
   );
 }
 
-/** Section wrapper with a mono label + serif sub-heading. */
+/** Section wrapper: small dashed side-tab label + bold mono sub-heading. */
 export function Section({
   label,
   title,
@@ -45,19 +52,25 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={`shell py-10 ${className}`}>
-      {label ? <p className="eyebrow">{label}</p> : null}
+    <section className={`shell py-8 ${className}`}>
+      {label ? (
+        <p className="label-lime mb-2 flex items-center gap-2">
+          <span className="inline-block h-px w-5 bg-lime/60" />
+          {label}
+        </p>
+      ) : null}
       {title ? (
-        <h2 className="headline mt-2 text-2xl sm:text-3xl">
-          {title} {emphasis ? <span className="em">{emphasis}</span> : null}
+        <h2 className="headline text-h2">
+          {title}
+          {emphasis ? <span className="em"> {emphasis}</span> : null}
         </h2>
       ) : null}
-      <div className={label || title ? 'mt-6' : ''}>{children}</div>
+      <div className={label || title ? 'mt-5' : ''}>{children}</div>
     </section>
   );
 }
 
-/** Empty state that instructs. Use where contract reads aren't wired yet. */
+/** Empty state that instructs. Dashed frame, terminal voice. */
 export function EmptyState({
   title,
   hint,
@@ -70,11 +83,11 @@ export function EmptyState({
   todo?: string;
 }) {
   return (
-    <div className="card flex flex-col items-start gap-3">
-      <p className="font-serif text-xl">{title}</p>
-      <p className="max-w-prose text-sm text-mute">{hint}</p>
+    <div className="dashed flex flex-col items-center gap-3 bg-ink/40 px-6 py-10 text-center">
+      <p className="headline text-lg">{title}</p>
+      <p className="max-w-prose text-[12.5px] text-mute">{hint}</p>
       {cta ? (
-        <Link href={cta.href} className="pill-ghost mt-1">
+        <Link href={cta.href} className="btn-ghost mt-1">
           {cta.label}
         </Link>
       ) : null}
@@ -86,18 +99,15 @@ export function EmptyState({
 /** Clearly-marked placeholder tag for contract wiring points. */
 export function TodoTag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="data inline-flex items-center gap-1.5 rounded-md border border-lime/40 bg-lime/5 px-2 py-1 text-[11px] uppercase tracking-wider text-lime">
-      TODO · {children}
-    </span>
+    <span className="chip chip-lime bg-lime/5">TODO · {children}</span>
   );
 }
 
-/** A labelled stat tile. `mono` renders the value in the data font. */
+/** Labelled stat tile: dim label over a big tabular value. */
 export function Stat({
   label,
   value,
   sub,
-  mono = true,
 }: {
   label: string;
   value: React.ReactNode;
@@ -105,15 +115,15 @@ export function Stat({
   mono?: boolean;
 }) {
   return (
-    <div className="card">
-      <p className="eyebrow">{label}</p>
-      <p className={`mt-2 text-2xl ${mono ? 'data' : 'font-serif'}`}>{value}</p>
-      {sub ? <p className="mt-1 text-xs text-mute">{sub}</p> : null}
+    <div className="panel panel-hover px-5 py-4">
+      <p className="label">{label}</p>
+      <p className="num mt-1.5 font-mono text-[22px] font-semibold text-lime">{value}</p>
+      {sub ? <p className="mt-0.5 text-[11.5px] text-mute">{sub}</p> : null}
     </div>
   );
 }
 
-/** Simple pill-style link button. */
+/** Button-styled link. */
 export function PillLink({
   href,
   children,
@@ -123,7 +133,7 @@ export function PillLink({
   children: React.ReactNode;
   variant?: 'lime' | 'ghost' | 'ink';
 }) {
-  const cls = variant === 'lime' ? 'pill-lime' : variant === 'ink' ? 'pill-ink' : 'pill-ghost';
+  const cls = variant === 'lime' ? 'btn-lime' : variant === 'ink' ? 'pill-ink' : 'btn-ghost';
   return (
     <Link href={href} className={cls}>
       {children}

@@ -36,7 +36,7 @@ export default function LockerPage() {
               onClick={() => setKind(k.id)}
               className={`card text-left transition-colors ${kind === k.id ? 'border-lime' : 'hover:border-lime/40'}`}
             >
-              <p className="font-serif text-lg">{k.label}</p>
+              <p className="headline text-[14px]">{k.label}</p>
               <p className="mt-2 text-sm text-mute">{k.desc}</p>
             </button>
           ))}

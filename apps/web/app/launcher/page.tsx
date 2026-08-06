@@ -72,7 +72,7 @@ export default function LauncherPage() {
             )}
             {step === 3 && (
               <div className="sm:col-span-2 rounded-xl border border-line bg-black/40 p-5">
-                <p className="font-serif text-lg">Review & sign</p>
+                <p className="headline text-[14px]">Review & sign</p>
                 <p className="mt-2 text-sm text-mute">
                   Everything below deploys a curve and opens a public Buyback Bar. Odds are printed
                   before any token moves.

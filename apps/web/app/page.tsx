@@ -1,270 +1,306 @@
 import Link from 'next/link';
 import { Reveal } from '@/components/Reveal';
 import { OddsTable } from '@/components/OddsTable';
-import { PillLink } from '@/components/ui';
 
 /**
- * Landing page — port of the pitbosses.html reference.
- * Structure: hero → The Floor (modules grid) → The Pit (odds) → Be the House
- * (lime slab) → The Launcher / Opening Bell → House Book visual.
- * Nav, footer and ticker live in the root layout.
+ * Home — terminal-trading dashboard.
+ * Dashed masthead → hero panel with live stat rail → module chip row →
+ * module grid (boxed panels) → The Pit odds → Be the House → House Book.
+ * Shell (sidebar/topbar), footer and ticker live in the root layout.
  */
 
-const FLOOR_MODULES = [
+const MODULES = [
   {
-    tag: 'Floor',
+    tag: 'LIVE',
     href: '/floor',
-    title: 'Get a Boss',
-    body: 'Buy off the flat AMM or snipe a listing. Activate it and it starts working the floor.',
+    title: 'The Floor',
+    body: '4,200 Bosses, each with its own onchain wallet. Activate one and every fee on the floor pays you — in the stock you elect.',
   },
   {
-    tag: 'Pit',
+    tag: 'LIVE',
     href: '/pit',
-    title: 'Work the Pit',
-    body: 'Buy a ticket, pick a lane, pull the machine. Every roll is verifiable. The edge is 10%.',
+    title: 'The Pit',
+    body: 'Ticket in, stock out. Floor 0.70x, ceiling 50x, RTP 90%. Every roll committed to entropy that does not exist yet.',
   },
   {
-    tag: 'Certificates',
+    tag: 'LIVE',
     href: '/certificates',
-    title: 'Mint a deed',
-    body: 'Bearer certificates, rendered fully onchain. Buy, gift, redeem. The paper is the asset.',
+    title: 'Bearer Certificates',
+    body: 'Any listed stock, sealed 1:1 into a numbered deed drawn fully onchain. Redeem burns the note in the same transaction.',
   },
   {
-    tag: 'Launcher',
+    tag: 'LIVE',
     href: '/launcher',
-    title: 'Ring the bell',
-    body: 'Launch a token on a live curve with a public Buyback Bar. Fill it and the bell rings.',
+    title: 'Launcher',
+    body: 'Fixed price or bonding curve. Every trade charges the Buyback Bar; a provably fair draw rings the Opening Bell.',
   },
   {
-    tag: 'Locker',
+    tag: 'LIVE',
     href: '/locker',
-    title: 'Lock it up',
-    body: 'Hard lock, linear vest, or burn the key. Collect fees while it sits. Proof, not promises.',
+    title: 'Locker',
+    body: 'Hard lock, linear vest, or permanent. Locked principal is mathematically untouchable. No admin key. Ever.',
   },
   {
-    tag: 'Loans',
+    tag: 'LIVE',
     href: '/loans',
-    title: 'Borrow against it',
-    body: 'Put your position to work. Borrow, repay, keep your streak. No custody, no middleman.',
+    title: 'Loans',
+    body: 'Post a Boss, borrow the full flat principal back. Repay exactly what you took. Default just sends it back to the vault.',
   },
-];
+] as const;
 
 const HOUSE_SOURCES = [
-  { name: 'PitEdge', pct: 42 },
-  { name: 'CertFees', pct: 14 },
-  { name: 'LauncherFees', pct: 18 },
-  { name: 'LockerFees', pct: 9 },
-  { name: 'LoanInterest', pct: 11 },
-  { name: 'AmmFees', pct: 6 },
+  { name: 'Pit edge', pct: 42, val: '4.21 ETH' },
+  { name: 'Certificate fees', pct: 14, val: '1.08 ETH' },
+  { name: 'Launcher fees', pct: 18, val: '2.66 ETH' },
+  { name: 'Locker fees', pct: 9, val: '0.94 ETH' },
+  { name: 'Loan interest', pct: 11, val: '0.53 ETH' },
+  { name: 'AMM fees', pct: 6, val: '0.36 ETH' },
 ];
 
-export default function LandingPage() {
+const CHIPS = [
+  { href: '/floor', label: 'The Floor', live: true },
+  { href: '/pit', label: 'The Pit', live: true },
+  { href: '/certificates', label: 'Certificates', live: true },
+  { href: '/launcher', label: 'Launcher', live: true },
+  { href: '/locker', label: 'Locker', live: true },
+  { href: '/loans', label: 'Loans', live: true },
+  { href: '/seasons', label: 'Seasons', live: false },
+  { href: '/docs', label: 'Docs', live: false },
+];
+
+export default function Home() {
   return (
-    <>
-      {/* HERO */}
-      <section className="relative border-b border-line">
-        <div className="shell grid gap-10 py-20 lg:grid-cols-[1.2fr_0.8fr] lg:py-28">
-          <div>
-            <p className="eyebrow">PitBosses · $PIT</p>
-            <h1 className="headline mt-5 text-display text-balance">
-              Run the floor.
-              <br />
-              Get paid in <span className="em">stock.</span>
+    <div className="pb-10">
+      {/* ---- Masthead: dashed frame, blinking cursor ---- */}
+      <header className="shell pt-6">
+        <Reveal>
+          <div className="dashed bg-ink/60 px-6 py-5">
+            <h1 className="headline text-h1">
+              The Pit<span className="text-lime">Bosses</span> Floor
+              <span className="cursor" aria-hidden />
             </h1>
-            <p className="mt-6 max-w-xl text-lg text-mute">
-              Buy a Boss. Work the Pit. Be the House. A permissionless floor where the edge accrues
-              to the book and the book pays out. Rewards are promotional — not dividends.
+            <p className="mt-1.5 text-[13px] text-mute">
+              Every fee pays the Bosses — in real stock · Robinhood Chain mainnet
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <PillLink href="/floor">Get a Boss</PillLink>
-              <PillLink href="/pit" variant="ghost">
-                Enter the Pit
-              </PillLink>
+          </div>
+        </Reveal>
+      </header>
+
+      {/* ---- Hero panel ---- */}
+      <section className="shell mt-4">
+        <Reveal>
+          <div className="panel relative overflow-hidden">
+            {/* glow accent */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-32 -top-40 h-96 w-96 rounded-full bg-lime/10 blur-3xl"
+            />
+            <div className="grid gap-8 p-7 sm:p-10 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <span className="chip chip-lime mb-5">
+                  <span className="h-1.5 w-1.5 animate-dot rounded-full bg-lime" /> The Pit is open
+                </span>
+                <h2 className="headline text-display">
+                  Run the floor.
+                  <br />
+                  Get paid in <span className="em">stock</span>.
+                </h2>
+                <p className="mt-5 max-w-xl text-[13.5px] leading-relaxed text-mute">
+                  Buy a Boss. Work the Pit. Be the House. Real tokenized stocks delivered straight
+                  to your Boss&apos;s onchain wallet. The worst roll on the board still returns
+                  70% — you can never lose more than 30% on a pull.
+                </p>
+                <div className="mt-7 flex flex-wrap gap-3">
+                  <Link href="/pit" className="btn-lime">
+                    Ring the bell →
+                  </Link>
+                  <Link href="/floor" className="btn-ghost">
+                    Get a Boss
+                  </Link>
+                </div>
+                <p className="label mt-6">
+                  Provably fair · Paid in real stock · Never lose more than 30%
+                </p>
+              </div>
+
+              {/* Stat rail */}
+              <div className="grid content-start gap-3 sm:grid-cols-2">
+                {[
+                  { l: 'House Book', v: '$2.41M', s: 'total accrued' },
+                  { l: 'Edge', v: '10%', s: 'RTP 90%' },
+                  { l: 'Bosses', v: '4,200', s: 'fixed supply' },
+                  { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
+                ].map((x) => (
+                  <div key={x.l} className="panel-raised px-4 py-3.5">
+                    <p className="label">{x.l}</p>
+                    <p className="num mt-1 font-mono text-[22px] font-semibold text-lime">{x.v}</p>
+                    <p className="text-[11px] text-mute">{x.s}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-
-          {/* Live figures — DATA, mono. TODO: wire to oracle + HouseBook reads. */}
-          <Reveal className="grid grid-cols-2 gap-3 self-center">
-            {[
-              { k: 'House Book', v: '$2.41M', s: 'total accrued' },
-              { k: 'Edge', v: '10%', s: 'return-to-player 90%' },
-              { k: 'Bosses', v: '4,663', s: 'on the floor' },
-              { k: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
-            ].map((c) => (
-              <div key={c.k} className="card">
-                <p className="eyebrow">{c.k}</p>
-                <p className="data mt-2 text-2xl text-lime">{c.v}</p>
-                <p className="mt-1 text-xs text-mute">{c.s}</p>
-              </div>
-            ))}
-          </Reveal>
-        </div>
+        </Reveal>
       </section>
 
-      {/* THE FLOOR — modules grid */}
-      <section className="shell py-20">
+      {/* ---- Module chip row ---- */}
+      <nav className="shell mt-4 flex flex-wrap gap-2">
+        {CHIPS.map((c) => (
+          <Link
+            key={c.href}
+            href={c.href}
+            className="chip transition hover:border-lime/50 hover:text-lime"
+          >
+            {c.live ? <span className="h-1.5 w-1.5 rounded-full bg-acid" /> : null}
+            {c.label}
+          </Link>
+        ))}
+      </nav>
+
+      {/* ---- Modules grid ---- */}
+      <section className="shell mt-10">
         <Reveal>
-          <p className="eyebrow">The Floor</p>
-          <h2 className="headline mt-2 text-section">
-            Six ways to <span className="em">work it.</span>
+          <p className="label-lime mb-2 flex items-center gap-2">
+            <span className="inline-block h-px w-5 bg-lime/60" /> The Floor
+          </p>
+          <h2 className="headline text-h2">
+            Six desks. One pot. <span className="em">Every fee pays you.</span>
           </h2>
         </Reveal>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FLOOR_MODULES.map((m, idx) => (
-            <Reveal key={m.title} delay={idx * 60}>
-              <Link
-                href={m.href}
-                className="card group flex h-full flex-col transition-colors hover:border-lime/40"
-              >
-                <p className="eyebrow">{m.tag}</p>
-                <p className="headline mt-3 text-2xl">{m.title}</p>
-                <p className="mt-2 flex-1 text-sm text-mute">{m.body}</p>
-                <span className="mt-4 text-sm text-lime opacity-0 transition-opacity group-hover:opacity-100">
-                  Open →
-                </span>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {MODULES.map((m, i) => (
+            <Reveal key={m.title} delay={i * 60}>
+              <Link href={m.href} className="panel panel-hover group block h-full p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="chip chip-lime">{m.tag}</span>
+                  <span className="text-dim transition group-hover:translate-x-0.5 group-hover:text-lime">
+                    →
+                  </span>
+                </div>
+                <h3 className="headline text-[15px]">{m.title}</h3>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-mute">{m.body}</p>
               </Link>
             </Reveal>
           ))}
         </div>
       </section>
 
-      {/* THE PIT — odds table */}
-      <section className="border-y border-line bg-ink/30">
-        <div className="shell grid gap-10 py-20 lg:grid-cols-[0.9fr_1.1fr]">
+      {/* ---- The Pit: odds ---- */}
+      <section className="shell mt-12">
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <Reveal>
-            <p className="eyebrow">The Pit</p>
-            <h2 className="headline mt-2 text-section">
-              Every roll is <span className="em">verifiable.</span>
-            </h2>
-            <p className="mt-5 max-w-md text-mute">
-              One table, twenty-one rows, no house tricks. The multiplier maps from a landed entropy
-              word by a pure function anyone can recompute. RTP is 90%. The rest is the edge — and
-              the edge is the point.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <PillLink href="/pit">Buy a ticket</PillLink>
-              <PillLink href="/book" variant="ghost">
-                See the book
-              </PillLink>
+            <div>
+              <p className="label-lime mb-2 flex items-center gap-2">
+                <span className="inline-block h-px w-5 bg-lime/60" /> The Pit
+              </p>
+              <h2 className="headline text-h2">
+                Real stock. Real odds. <span className="em">Sealed onchain.</span>
+              </h2>
+              <div className="mt-5 space-y-4">
+                {[
+                  ['01', 'The floor is 0.70×', 'The worst roll still returns 70% of your ticket — in stock.'],
+                  ['02', 'Wins settle as stock', 'Sell back at 95% of the live mark, or seal the full prize into a certificate — no spread.'],
+                  ['03', 'Two lanes, no cap', 'Instant lane for standard tickets. Vault lane with a longer commit delay for size.'],
+                  ['04', 'A spent note cannot exist', 'Redeem burns the deed and releases the stock in the same transaction.'],
+                ].map(([n, t, b]) => (
+                  <div key={n} className="flex gap-4">
+                    <span className="label-lime pt-0.5">{n}</span>
+                    <div>
+                      <p className="font-mono text-[13px] font-semibold uppercase tracking-wide text-paper">
+                        {t}
+                      </p>
+                      <p className="mt-1 text-[12.5px] text-mute">{b}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Link href="/pit" className="btn-lime mt-6 inline-flex">
+                Pull the machine →
+              </Link>
             </div>
           </Reveal>
-          <Reveal delay={80}>
+          <Reveal delay={100}>
             <OddsTable />
           </Reveal>
         </div>
       </section>
 
-      {/* BE THE HOUSE — the single full-bleed lime slab */}
-      <section className="bg-lime text-black">
-        <div className="shell py-24">
-          <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-black/60">Be the House</p>
-            <h2 className="headline mt-3 text-display">
-              Don't beat the house.
-              <br />
-              <span className="italic">Be</span> it.
+      {/* ---- Be the House ---- */}
+      <section className="shell mt-12">
+        <Reveal>
+          <div className="dashed bg-lime/[0.04] p-7 sm:p-9">
+            <p className="label-lime mb-2">Be the House</p>
+            <h2 className="headline text-h2">
+              Don&apos;t beat the house. <span className="em">Become it.</span>
             </h2>
-            <p className="mt-6 max-w-xl text-lg text-black/70">
-              Stake the bankroll. Take the other side of every roll. The edge that leaves players'
-              pockets lands in the book, and the book pays stakers in stock. Live APR, no lockups you
-              didn't choose.
+            <p className="mt-3 max-w-2xl text-[13px] text-mute">
+              Stake stock into the pit bankroll and earn on every roll, pro rata. The machine
+              inventory belongs to the Bosses who stake it — not a treasury.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/pit#bankroll" className="pill bg-black text-lime hover:bg-black/90">
-                Stake the bankroll
-              </Link>
-              <Link
-                href="/book"
-                className="pill border border-black/30 text-black hover:border-black/60"
-              >
-                Read the House Book
-              </Link>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* THE LAUNCHER — Opening Bell */}
-      <section className="shell py-20">
-        <div className="grid gap-10 lg:grid-cols-[1fr_1fr]">
-          <Reveal>
-            <p className="eyebrow">The Launcher · Opening Bell</p>
-            <h2 className="headline mt-2 text-section">
-              Fill the bar. <span className="em">Ring the bell.</span>
-            </h2>
-            <p className="mt-5 max-w-md text-mute">
-              Every launch runs a live curve with a public Buyback Bar. When the bar fills, the bell
-              rings — buybacks fire, the floor lifts, and the odds are printed for everyone before a
-              single token moves.
-            </p>
-            <div className="mt-7">
-              <PillLink href="/launcher">Ring the bell</PillLink>
-            </div>
-          </Reveal>
-
-          {/* Buyback Bar visual */}
-          <Reveal delay={80} className="card">
-            <div className="flex items-center justify-between">
-              <p className="eyebrow">Buyback Bar</p>
-              <span className="data text-xs text-lime">64% filled</span>
-            </div>
-            <div className="mt-4 h-4 w-full overflow-hidden rounded-full bg-black/60">
-              <div className="h-full rounded-full bg-lime" style={{ width: '64%' }} />
-            </div>
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
               {[
-                { k: 'Odds', v: '3.2×' },
-                { k: 'Fill', v: '$41K' },
-                { k: 'To bell', v: '$23K' },
-              ].map((s) => (
-                <div key={s.k} className="rounded-xl border border-line py-3">
-                  <p className="eyebrow">{s.k}</p>
-                  <p className="data mt-1 text-lg">{s.v}</p>
+                ['Player-owned bankroll', 'The house edge pays the floor, not a treasury.'],
+                ['Every roll, your cut', 'Sell-back spread accrues to stakers pro rata.'],
+                ['Exit when you want', 'Withdraw subject only to open-round reserves.'],
+              ].map(([t, b]) => (
+                <div key={t} className="panel-raised px-4 py-4">
+                  <p className="font-mono text-[12.5px] font-semibold uppercase tracking-wide text-paper">
+                    {t}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-mute">{b}</p>
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-xs text-mute">
-              Placeholder curve — TODO: wire to Launcher round reads.
-            </p>
-          </Reveal>
-        </div>
+            <Link href="/pit" className="btn-lime mt-6 inline-flex">
+              Stake the bankroll
+            </Link>
+          </div>
+        </Reveal>
       </section>
 
-      {/* HOUSE BOOK visual */}
-      <section className="border-t border-line">
-        <div className="shell py-20">
+      {/* ---- House Book ---- */}
+      <section className="shell mt-12">
+        <div className="grid items-center gap-6 lg:grid-cols-2">
           <Reveal>
-            <p className="eyebrow">The House Book</p>
-            <h2 className="headline mt-2 text-section">
-              Where the edge <span className="em">accrues.</span>
-            </h2>
-            <p className="mt-4 max-w-xl text-mute">
-              Six sources feed one book. Anyone can crank the payout and take a 0.5% tip for doing
-              it. Fully onchain, fully public.
-            </p>
+            <div>
+              <p className="label-lime mb-2 flex items-center gap-2">
+                <span className="inline-block h-px w-5 bg-lime/60" /> House Book
+              </p>
+              <h2 className="headline text-h2">
+                Every stream. <span className="em">One public pot.</span>
+              </h2>
+              <p className="mt-3 max-w-lg text-[13px] text-mute">
+                Pit edge, certificate fees, launcher fees, locker fees, loan interest — one book
+                you can watch fill. When the bar is full, anyone cranks it and takes the tip.
+              </p>
+              <Link href="/book" className="btn-ghost mt-5 inline-flex">
+                Open the book →
+              </Link>
+            </div>
           </Reveal>
-
-          <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {HOUSE_SOURCES.map((s, idx) => (
-              <Reveal key={s.name} delay={idx * 50} className="card">
-                <div className="flex items-center justify-between">
-                  <p className="data text-sm">{s.name}</p>
-                  <span className="data text-xs text-mute">{s.pct}%</span>
+          <Reveal delay={100}>
+            <div className="panel p-6">
+              {HOUSE_SOURCES.map((s) => (
+                <div
+                  key={s.name}
+                  className="flex items-center justify-between border-b border-line/60 py-2.5 last:border-0"
+                >
+                  <span className="text-[12px] text-mute">{s.name}</span>
+                  <span className="num font-mono text-[13px] text-paper">{s.val}</span>
                 </div>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-black/60">
-                  <div className="h-full rounded-full bg-lime" style={{ width: `${s.pct}%` }} />
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          <div className="mt-8">
-            <PillLink href="/book" variant="ghost">
-              Crank the payout
-            </PillLink>
-          </div>
+              ))}
+              <div className="mt-4 flex items-center justify-between border-t border-limeSoft pt-3.5">
+                <span className="label">Accrued this round</span>
+                <span className="num font-mono text-[15px] font-semibold text-lime">9.78 ETH</span>
+              </div>
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-line2">
+                <div className="h-full w-[73%] bg-lime" />
+              </div>
+              <p className="label mt-2">73% to next crank · anyone can pull it</p>
+            </div>
+          </Reveal>
         </div>
       </section>
-    </>
+    </div>
   );
 }

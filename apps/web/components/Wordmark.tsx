@@ -6,8 +6,8 @@ export function Wordmark({ className = '' }: { className?: string }) {
   return (
     <div className={`relative overflow-hidden ${className}`} aria-hidden>
       <span
-        className="block select-none whitespace-nowrap font-serif italic leading-[0.72] text-lime"
-        style={{ fontSize: 'clamp(5rem, 22vw, 20rem)', transform: 'translateY(12%)' }}
+        className="block select-none whitespace-nowrap text-center font-mono font-bold uppercase leading-[0.8] tracking-tighter text-lime/90"
+        style={{ fontSize: 'clamp(3.5rem, 15vw, 14rem)', transform: 'translateY(16%)' }}
       >
         PitBosses
       </span>

@@ -26,7 +26,7 @@ export default function CertificatesPage() {
       <Section label="The Counter" title="Buy" emphasis="or gift.">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="card">
-            <p className="font-serif text-xl">Buy a certificate</p>
+            <p className="headline text-[15px]">Buy a certificate</p>
             <p className="mt-2 text-sm text-mute">
               Set a face value and mint. The SVG is drawn onchain at redemption time.
             </p>
@@ -47,7 +47,7 @@ export default function CertificatesPage() {
           </div>
 
           <div className="card">
-            <p className="font-serif text-xl">Gift a certificate</p>
+            <p className="headline text-[15px]">Gift a certificate</p>
             <p className="mt-2 text-sm text-mute">Mint straight to a recipient. Bearer holds it.</p>
             <label className="mt-4 block">
               <span className="eyebrow">Recipient</span>

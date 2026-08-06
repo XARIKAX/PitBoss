@@ -23,7 +23,7 @@ export function Ticker() {
   const items = [...PLACEHOLDER_ITEMS, ...PLACEHOLDER_ITEMS];
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-black/90 backdrop-blur">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-black/90 backdrop-blur lg:left-[var(--sidebar-w)]">
       <div className="relative overflow-hidden py-2">
         <div className="animate-ticker flex w-max whitespace-nowrap will-change-transform">
           {items.map((item, i) => (

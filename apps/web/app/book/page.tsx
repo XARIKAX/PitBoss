@@ -51,7 +51,7 @@ export default function BookPage() {
 
           <div className="card flex flex-col justify-between">
             <div>
-              <p className="font-serif text-lg">Crank the payout</p>
+              <p className="headline text-[14px]">Crank the payout</p>
               <p className="mt-2 text-sm text-mute">
                 Push accrued fees to recipients. You keep a 0.5% tip for the gas and the effort.
               </p>

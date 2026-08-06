@@ -31,7 +31,7 @@ export default function FloorPage() {
       <Section label="Get a Boss" title="Buy" emphasis="or snipe.">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="card">
-            <p className="font-serif text-xl">Buy off the AMM</p>
+            <p className="headline text-[15px]">Buy off the AMM</p>
             <p className="mt-2 text-sm text-mute">
               Flat-price AMM vault. Pick a stock token, set your size, confirm.
             </p>
@@ -63,7 +63,7 @@ export default function FloorPage() {
           </div>
 
           <div className="card">
-            <p className="font-serif text-xl">Snipe a listing</p>
+            <p className="headline text-[15px]">Snipe a listing</p>
             <p className="mt-2 text-sm text-mute">
               Watch the floor and take a specific Boss the moment it lists.
             </p>
@@ -97,7 +97,7 @@ export default function FloorPage() {
 
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <div className="card">
-                <p className="font-serif text-lg">Elections</p>
+                <p className="headline text-[14px]">Elections</p>
                 <p className="mt-2 text-sm text-mute">
                   Vote your Bosses on open proposals. Weight follows floor position.
                 </p>
@@ -108,7 +108,7 @@ export default function FloorPage() {
                 />
               </div>
               <div className="card">
-                <p className="font-serif text-lg">Auto-DCA</p>
+                <p className="headline text-[14px]">Auto-DCA</p>
                 <p className="mt-2 text-sm text-mute">
                   Route rewards back into your Boss on a schedule.
                 </p>
