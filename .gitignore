@@ -30,3 +30,7 @@ apps/web/public/hero/banner-*.webp
 apps/web/public/hero/banner-*.png
 apps/web/public/hero/og.png
 apps/web/public/hero/icon-*.png
+
+# art generator output (regenerate with art/generate.mjs)
+art/output/
+art/node_modules/
