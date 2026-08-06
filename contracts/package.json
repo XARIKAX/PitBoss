@@ -1,0 +1,19 @@
+{
+  "name": "@pitbosses/contracts",
+  "version": "1.0.0",
+  "description": "PitBosses Solidity contracts (Foundry). OpenZeppelin v5 + ERC-6551.",
+  "license": "MIT",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vvv",
+    "gas": "forge test --gas-report",
+    "compile-check": "node scripts/compile-check.js src,test,script"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "erc6551": "^0.3.1"
+  },
+  "devDependencies": {
+    "solc": "^0.8.24"
+  }
+}

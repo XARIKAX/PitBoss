@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --black: #0a0a0a;
+  --ink: #111110;
+  --lime: #c6ff00;
+  --paper: #f5f3ee;
+  --mute: #8a8a84;
+  --line: rgba(245, 243, 238, 0.12);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--black);
+    color: var(--paper);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--lime);
+    color: var(--black);
+  }
+
+  /* Data uses mono. Never dashed borders anywhere. */
+  * {
+    border-style: solid;
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-5 sm:px-8;
+  }
+
+  /* Serif display headline; emphasis words get .em (lime italic). */
+  .headline {
+    @apply font-serif font-normal leading-none tracking-tight;
+  }
+  .headline .em {
+    @apply italic text-lime;
+  }
+
+  .eyebrow {
+    @apply font-mono text-xs uppercase tracking-[0.22em] text-mute;
+  }
+
+  /* Pill buttons. */
+  .pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium transition-colors duration-200;
+  }
+  .pill-lime {
+    @apply pill bg-lime text-black hover:bg-lime/90;
+  }
+  .pill-ghost {
+    @apply pill border border-line text-paper hover:border-paper/40;
+  }
+  .pill-ink {
+    @apply pill bg-ink text-paper hover:bg-ink/80 border border-line;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line bg-ink/40 p-6;
+  }
+
+  .data {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .divider {
+    @apply border-t border-line;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Scroll reveal — respect reduced motion. */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .animate-ticker {
+    animation: none !important;
+  }
+}

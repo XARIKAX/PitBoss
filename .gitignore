@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# next.js
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+
+# keeper
+apps/keeper/dist/
+
+# env / secrets
+.env
+.env.local
+*.local
+
+# os / editor
+.DS_Store
+*.log

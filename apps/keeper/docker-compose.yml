@@ -1,0 +1,52 @@
+# Runs all four PitBosses keeper bots from a single image and a single .env.
+#
+#   docker compose up            # start all four (foreground)
+#   docker compose up -d         # detached
+#   docker compose up fulfill    # just one bot
+#   docker compose logs -f       # tail structured logs
+#
+# The deployments file and the web public dir are mounted read-only / read-write
+# so the bots can auto-load addresses and season-agg can publish the leaderboard.
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: pitbosses/keeper:latest
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    # Auto-loaded contract addresses (deployments.<chainId>.json).
+    - ../../contracts/deployments:/contracts/deployments:ro
+  environment:
+    DEPLOYMENTS_DIR: /contracts/deployments
+  # Bots trap SIGTERM and exit cleanly after the in-flight tick.
+  stop_grace_period: 30s
+
+services:
+  fulfill:
+    <<: *common
+    container_name: pitbosses-fulfill
+    command: ["pnpm", "fulfill"]
+
+  crank-watch:
+    <<: *common
+    container_name: pitbosses-crank-watch
+    command: ["pnpm", "crank-watch"]
+
+  restock:
+    <<: *common
+    container_name: pitbosses-restock
+    command: ["pnpm", "restock"]
+
+  season-agg:
+    <<: *common
+    container_name: pitbosses-season-agg
+    command: ["pnpm", "season-agg"]
+    # season-agg is read-only on chain but WRITES the leaderboard into the web app.
+    volumes:
+      - ../../contracts/deployments:/contracts/deployments:ro
+      - ../web/public:/web/public:rw
+    environment:
+      DEPLOYMENTS_DIR: /contracts/deployments
+      LEADERBOARD_PATH: /web/public/leaderboard.json

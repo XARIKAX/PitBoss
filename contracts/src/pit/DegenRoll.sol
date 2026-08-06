@@ -1,0 +1,373 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IEntropyConductor} from "../interfaces/IEntropyConductor.sol";
+import {IHouseBook} from "../interfaces/IHouseBook.sol";
+import {ISwapRouter, IOracle, IPitBoss, IActivationManager} from "../interfaces/Support.sol";
+import {IFloorPosition} from "../interfaces/IFloorPosition.sol";
+import {BearerCertificate} from "./BearerCertificate.sol";
+import {PrizeTable} from "./PrizeTable.sol";
+import {Errors} from "../lib/Errors.sol";
+
+/// @notice Bumper surface of FloorPosition used to reward bankroll participation.
+interface IFloorBump {
+    function bump(uint256 tokenId, uint256 points) external;
+    function EPOCH() external view returns (uint64);
+}
+
+/// @title DegenRoll
+/// @notice One roll machine per stock token. Tickets are paid in ETH; prizes settle
+///         as stock. The bankroll is player-owned: activated Bosses stake stock as
+///         inventory and earn the sell-back spread pro rata through share
+///         accounting. Every open pull reserves worst-case 50× from free inventory,
+///         so the machine can always pay. Fails closed on entropy stall: ticket
+///         sales stop, but settles, seals, cash-outs, and refunds always work.
+/// @dev    Economic model (documented in docs/PIT.md): ticket T is escrowed until
+///         resolution; at settle a 10% edge is split 2.5% creator / 2.5% House Book
+///         / 5% protocol reserve, and the 90% net feeds an ETH float the `restock`
+///         keeper converts to bankroll stock at the oracle mark. Prize notional is
+///         the full ticket value in stock; table EV is 0.90 so the bankroll is flat
+///         in expectation and earns the 5% sell-back spread plus dust. Reserve
+///         invariant maintained everywhere: totalBankrollStock >= totalReserved.
+///         Audit-scoped: custodies ETH float + stock bankroll + open reserves.
+contract DegenRoll is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    enum Lane {
+        Instant,
+        Vault
+    }
+    enum Status {
+        Open,
+        Settled,
+        Refunded
+    }
+
+    struct Round {
+        address player;
+        uint256 escrowEth; // full ticket, held until settle/refund
+        uint256 notional; // ticket value in stock at buy time
+        uint256 reserved; // 50x notional, held against the bankroll
+        uint64 boughtAt;
+        uint64 readyAt;
+        bytes32 entropyId;
+        Status status;
+    }
+
+    // -------- immutable wiring --------
+    IERC20 public immutable stock;
+    IEntropyConductor public immutable conductor;
+    IHouseBook public immutable houseBook;
+    IOracle public immutable oracle;
+    ISwapRouter public immutable router;
+    BearerCertificate public immutable certificate;
+    IPitBoss public immutable boss;
+    IActivationManager public immutable activation;
+    IFloorBump public immutable floor;
+    address public immutable creator;
+    address public immutable protocolReserve;
+
+    // -------- config [CONFIG] --------
+    uint256 public constant EDGE_BPS = 1000; // 10% total edge
+    uint256 public constant CREATOR_BPS = 250; // 2.5%
+    uint256 public constant BOOK_BPS = 250; // 2.5%
+    uint256 public constant PROTOCOL_BPS = 500; // 5%
+    uint256 public constant INSTANT_MAX_USD = 100e8; // instant lane ticket ceiling
+    uint64 public constant INSTANT_DELAY = 30 seconds; // short entropy delay
+    uint64 public constant VAULT_DELAY = 10 minutes; // longer commit delay (anti-grind)
+    uint64 public constant REFUND_WINDOW = 48 hours;
+    uint256 public constant SELLBACK_BPS = 9500; // 95% of oracle mark
+    uint256 public constant RESTOCK_SLIPPAGE_BPS = 300;
+    uint256 public constant LOSS_STREAK_LEN = 5; // consecutive floor rolls
+    uint256 public constant REBATE_BPS = 1000; // 10% of avg ticket
+    uint256 public constant BANKROLL_STAKE_POINTS = 10;
+
+    // -------- state --------
+    uint256 public nextRoundId = 1;
+    mapping(uint256 => Round) public rounds;
+
+    uint256 public totalBankrollStock; // staked + earned, in stock units
+    uint256 public totalReserved; // Σ open-round reserves (invariant: <= bankroll)
+    uint256 public ethFloat; // net ticket ETH awaiting restock -> stock
+    uint256 public totalShares;
+    mapping(address => uint256) public shares;
+
+    // loss-streak tracking (per player wallet on this machine)
+    mapping(address => uint256) public streakCount;
+    mapping(address => uint256) public streakTicketSum;
+
+    event Bought(uint256 indexed roundId, address indexed player, Lane lane, uint256 ticketEth, uint256 notional);
+    event Settled(uint256 indexed roundId, address indexed player, uint256 word, uint256 milliX, uint256 prize, bool wasSealed);
+    event Refunded(uint256 indexed roundId, address indexed player, uint256 amount);
+    event SoldBack(address indexed player, uint256 stockIn, uint256 ethOut);
+    event Staked(address indexed staker, uint256 indexed bossId, uint256 amount, uint256 sharesOut);
+    event Unstaked(address indexed staker, uint256 amount, uint256 sharesIn);
+    event Restocked(address indexed keeper, uint256 ethIn, uint256 stockOut);
+    event RebateMinted(address indexed player, uint256 certId, uint256 amount);
+
+    constructor(
+        address stock_,
+        address conductor_,
+        address houseBook_,
+        address oracle_,
+        address router_,
+        address certificate_,
+        address boss_,
+        address activation_,
+        address floor_,
+        address creator_,
+        address protocolReserve_
+    ) {
+        stock = IERC20(stock_);
+        conductor = IEntropyConductor(conductor_);
+        houseBook = IHouseBook(houseBook_);
+        oracle = IOracle(oracle_);
+        router = ISwapRouter(router_);
+        certificate = BearerCertificate(certificate_);
+        boss = IPitBoss(boss_);
+        activation = IActivationManager(activation_);
+        floor = IFloorBump(floor_);
+        creator = creator_;
+        protocolReserve = protocolReserve_;
+    }
+
+    // ==================== play ====================
+
+    /// @notice Buy a ticket and commit to future entropy. Fails closed if entropy
+    ///         is unhealthy. Reserves worst-case 50× from free inventory.
+    function buy(Lane lane) external payable nonReentrant returns (uint256 roundId) {
+        if (!conductor.healthy()) revert Errors.FloorUnhealthy();
+        uint256 t = msg.value;
+        if (t == 0) revert Errors.ZeroAmount();
+
+        uint256 usd = (t * oracle.usdPerEth()) / 1e18; // 1e8-scaled
+        uint64 delay;
+        if (lane == Lane.Instant) {
+            if (usd > INSTANT_MAX_USD) revert Errors.InvalidConfig();
+            delay = INSTANT_DELAY;
+        } else {
+            delay = VAULT_DELAY;
+        }
+
+        uint256 notional = _stockFor(t);
+        if (notional == 0) revert Errors.InvalidConfig();
+        uint256 reserve = (notional * PrizeTable.maxMultiplierMilliX()) / PrizeTable.ONE_X;
+        if (totalBankrollStock - totalReserved < reserve) revert Errors.ReserveShortfall();
+        totalReserved += reserve;
+
+        roundId = nextRoundId++;
+        bytes32 id = keccak256(abi.encode(address(this), roundId));
+        uint64 readyAt = uint64(block.timestamp) + delay;
+        rounds[roundId] = Round({
+            player: msg.sender,
+            escrowEth: t,
+            notional: notional,
+            reserved: reserve,
+            boughtAt: uint64(block.timestamp),
+            readyAt: readyAt,
+            entropyId: id,
+            status: Status.Open
+        });
+        conductor.commit(id, readyAt);
+        emit Bought(roundId, msg.sender, lane, t, notional);
+    }
+
+    /// @notice Settle a fulfilled round, paying the prize as stock to the player's
+    ///         wallet. Always available (never gated on health).
+    function settle(uint256 roundId) external nonReentrant returns (uint256 prize) {
+        return _resolve(roundId, false);
+    }
+
+    /// @notice Settle a fulfilled round by sealing 100% of the prize into a Bearer
+    ///         Certificate — no sell-back spread taken.
+    function sealIntoCertificate(uint256 roundId) external nonReentrant returns (uint256 prize) {
+        return _resolve(roundId, true);
+    }
+
+    function _resolve(uint256 roundId, bool seal) internal returns (uint256 prize) {
+        Round storage r = rounds[roundId];
+        if (r.status != Status.Open) revert Errors.RoundAlreadySettled();
+        // Land the word (idempotent). Reverts if not yet ready.
+        uint256 word = conductor.fulfill(r.entropyId);
+        (uint256 milliX,) = PrizeTable.multiplierFor(word);
+        prize = (r.notional * milliX) / PrizeTable.ONE_X;
+
+        r.status = Status.Settled;
+        totalReserved -= r.reserved; // release worst-case hold
+
+        // Split edge from escrow; net feeds the restock float.
+        _splitEdge(r.escrowEth);
+
+        // Pay prize from bankroll (guaranteed solvent by the reserve invariant).
+        totalBankrollStock -= prize;
+        if (seal) {
+            stock.forceApprove(address(certificate), prize);
+            certificate.issue(r.player, address(stock), prize);
+        } else {
+            stock.safeTransfer(r.player, prize);
+        }
+
+        _updateStreak(r.player, r.notional, milliX);
+        emit Settled(roundId, r.player, word, milliX, prize, seal);
+    }
+
+    /// @notice Refund an unfulfilled pull after the 48h window. Always available.
+    function refund(uint256 roundId) external nonReentrant {
+        Round storage r = rounds[roundId];
+        if (r.status != Status.Open) revert Errors.RoundAlreadySettled();
+        if (conductor.isFulfilled(r.entropyId)) revert Errors.RoundAlreadySettled();
+        if (block.timestamp < r.boughtAt + REFUND_WINDOW) revert Errors.NotRefundableYet();
+
+        r.status = Status.Refunded;
+        totalReserved -= r.reserved;
+        uint256 amount = r.escrowEth;
+        (bool ok,) = r.player.call{value: amount}("");
+        if (!ok) revert Errors.InsufficientPayment();
+        emit Refunded(roundId, r.player, amount);
+    }
+
+    /// @notice Sell won stock back to the bankroll at 95% of the oracle mark; the
+    ///         5% spread stays in the bankroll for stakers. Always available.
+    function sellBack(uint256 amount) external nonReentrant {
+        if (amount == 0) revert Errors.ZeroAmount();
+        uint256 value = (amount * oracle.ethPerToken(address(stock))) / 1e18;
+        uint256 ethOut = (value * SELLBACK_BPS) / 10_000;
+        if (ethOut > ethFloat) revert Errors.InsufficientPayment();
+
+        stock.safeTransferFrom(msg.sender, address(this), amount);
+        totalBankrollStock += amount; // full stock enters bankroll
+        ethFloat -= ethOut; // 95% paid out; 5% spread retained as stock
+
+        (bool ok,) = msg.sender.call{value: ethOut}("");
+        if (!ok) revert Errors.InsufficientPayment();
+        emit SoldBack(msg.sender, amount, ethOut);
+    }
+
+    // ==================== bankroll ====================
+
+    /// @notice Stake stock into the machine bankroll. Caller must own an activated
+    ///         Boss (`bossId`). Mints pro-rata shares.
+    function stakeBankroll(uint256 bossId, uint256 amount) external nonReentrant returns (uint256 sharesOut) {
+        if (boss.ownerOf(bossId) != msg.sender) revert Errors.NotOwner();
+        if (!activation.isActivated(bossId)) revert Errors.NotActivated();
+        if (amount == 0) revert Errors.ZeroAmount();
+
+        stock.safeTransferFrom(msg.sender, address(this), amount);
+        sharesOut = totalShares == 0 ? amount : (amount * totalShares) / totalBankrollStock;
+        totalShares += sharesOut;
+        shares[msg.sender] += sharesOut;
+        totalBankrollStock += amount;
+
+        // Reward bankroll participation on the floor (best-effort).
+        try floor.bump(bossId, BANKROLL_STAKE_POINTS) {} catch {}
+        emit Staked(msg.sender, bossId, amount, sharesOut);
+    }
+
+    /// @notice Withdraw bankroll stake, limited by open-round reserves. Always
+    ///         available up to free inventory.
+    function unstake(uint256 sharesIn) external nonReentrant returns (uint256 amount) {
+        if (sharesIn == 0 || sharesIn > shares[msg.sender]) revert Errors.ZeroAmount();
+        amount = (sharesIn * totalBankrollStock) / totalShares;
+        uint256 free = totalBankrollStock - totalReserved;
+        if (amount > free) revert Errors.ReserveShortfall();
+
+        shares[msg.sender] -= sharesIn;
+        totalShares -= sharesIn;
+        totalBankrollStock -= amount;
+        stock.safeTransfer(msg.sender, amount);
+        emit Unstaked(msg.sender, amount, sharesIn);
+    }
+
+    /// @notice Convert the accumulated ETH float into bankroll stock at the oracle
+    ///         mark. Permissionless keeper action. Always available.
+    function restock() external nonReentrant returns (uint256 stockOut) {
+        uint256 ethIn = ethFloat;
+        if (ethIn == 0) revert Errors.ZeroAmount();
+        uint256 quote = router.quoteETHForTokens(address(stock), ethIn);
+        uint256 minOut = (quote * (10_000 - RESTOCK_SLIPPAGE_BPS)) / 10_000;
+        ethFloat = 0;
+        stockOut = router.swapExactETHForTokens{value: ethIn}(address(stock), minOut, address(this));
+        totalBankrollStock += stockOut;
+        emit Restocked(msg.sender, ethIn, stockOut);
+    }
+
+    // ==================== views ====================
+
+    function freeStock() external view returns (uint256) {
+        return totalBankrollStock - totalReserved;
+    }
+
+    /// @notice Stock value of one share, scaled 1e18. Rises as the bankroll earns.
+    function sharePrice() external view returns (uint256) {
+        if (totalShares == 0) return 1e18;
+        return (totalBankrollStock * 1e18) / totalShares;
+    }
+
+    function previewRoll(uint256 roundId) external view returns (uint256 milliX, uint256 prize) {
+        Round storage r = rounds[roundId];
+        uint256 word = conductor.previewWord(r.entropyId);
+        (milliX,) = PrizeTable.multiplierFor(word);
+        prize = (r.notional * milliX) / PrizeTable.ONE_X;
+    }
+
+    // ==================== internal ====================
+
+    function _stockFor(uint256 ethAmount) internal view returns (uint256) {
+        uint256 px = oracle.ethPerToken(address(stock)); // eth-wei per 1e18 token
+        if (px == 0) return 0;
+        return (ethAmount * 1e18) / px;
+    }
+
+    function _splitEdge(uint256 ticketEth) internal {
+        uint256 edge = (ticketEth * EDGE_BPS) / 10_000;
+        uint256 toCreator = (ticketEth * CREATOR_BPS) / 10_000;
+        uint256 toBook = (ticketEth * BOOK_BPS) / 10_000;
+        uint256 toProtocol = edge - toCreator - toBook; // remainder = protocol 5%
+        uint256 net = ticketEth - edge;
+        ethFloat += net;
+
+        if (toBook > 0) houseBook.payFee{value: toBook}(IHouseBook.Source.PitEdge);
+        if (toCreator > 0) {
+            (bool ok,) = creator.call{value: toCreator}("");
+            if (!ok) revert Errors.InsufficientPayment();
+        }
+        if (toProtocol > 0) {
+            (bool ok,) = protocolReserve.call{value: toProtocol}("");
+            if (!ok) revert Errors.InsufficientPayment();
+        }
+    }
+
+    function _updateStreak(address player, uint256 notional, uint256 milliX) internal {
+        if (milliX == PrizeTable.FLOOR_X) {
+            uint256 c = streakCount[player] + 1;
+            uint256 sum = streakTicketSum[player] + notional;
+            if (c >= LOSS_STREAK_LEN) {
+                uint256 avg = sum / c;
+                uint256 rebate = (avg * REBATE_BPS) / 10_000;
+                streakCount[player] = 0;
+                streakTicketSum[player] = 0;
+                // Only mint if free inventory covers it (keeps reserve invariant).
+                if (rebate > 0 && totalBankrollStock - totalReserved >= rebate) {
+                    totalBankrollStock -= rebate;
+                    stock.forceApprove(address(certificate), rebate);
+                    uint256 certId = certificate.issue(player, address(stock), rebate);
+                    emit RebateMinted(player, certId, rebate);
+                }
+            } else {
+                streakCount[player] = c;
+                streakTicketSum[player] = sum;
+            }
+        } else {
+            streakCount[player] = 0;
+            streakTicketSum[player] = 0;
+        }
+    }
+
+    receive() external payable {
+        // Direct ETH is treated as a float donation to the bankroll restock buffer.
+        ethFloat += msg.value;
+    }
+}
