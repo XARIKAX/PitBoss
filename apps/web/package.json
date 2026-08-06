@@ -5,6 +5,7 @@
   "description": "PitBosses front end — Run the floor. Get paid in stock.",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/hero-crops.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
+    "sharp": "^0.35.3",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3"
   }

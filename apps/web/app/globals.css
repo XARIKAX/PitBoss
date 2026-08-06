@@ -9,6 +9,11 @@
 :root {
   --sidebar-w: 236px;
   --topbar-h: 56px;
+  /* HERO-ONLY tokens. Gold belongs to the artwork: it appears only in the hero
+     band (glow bleed, letterbox hairlines) and optionally the footer wordmark.
+     Never on buttons, never outside the hero composition. */
+  --gold: #f5c842;
+  --amber-glow: rgba(245, 180, 60, 0.14);
 }
 
 * {
@@ -203,6 +208,121 @@ a {
   /* `data` marked live values before; keep tabular numerals + slight lime tint */
   .data {
     @apply font-mono num;
+  }
+}
+
+/* ============================================================
+   Hero banner — cinematic band treatment (hero-only)
+   ============================================================ */
+.hero-band {
+  position: relative;
+  width: 100%;
+  height: clamp(420px, 56vh, 640px);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center 38%;
+}
+@media (max-width: 639px) {
+  .hero-band {
+    height: 46vh;
+    min-height: 320px;
+  }
+}
+
+.hero-band img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 38%;
+  image-rendering: auto; /* painterly-pixel: nearest-neighbor would shimmer */
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.hero-band img.is-loaded {
+  opacity: 1;
+}
+/* Slow drift: 1.05 -> 1.0 once on load. No loop, no scroll parallax. */
+.hero-band img.is-loaded {
+  animation: hero-drift 14s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+@keyframes hero-drift {
+  from {
+    transform: scale(1.05);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Edge dissolve: art emerges from the page — no hard rectangle. */
+.hero-dissolve {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, #0a0a0a 0%, transparent 120px),
+    linear-gradient(0deg, #0a0a0a 0%, transparent 180px),
+    linear-gradient(90deg, #0a0a0a 0%, transparent 8vw),
+    linear-gradient(270deg, #0a0a0a 0%, transparent 8vw);
+}
+
+/* Vignette, center-weighted on the middle Boss. */
+.hero-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 62% 70% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.3) 100%);
+}
+
+/* Amber bloom: the logo reads as a lit sign. Bleeds past the top edge. */
+.hero-bloom {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: -80px;
+  height: 55%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 100% at 50% 35%, var(--amber-glow), transparent 70%);
+  animation: hero-bloom 9s ease-in-out infinite;
+}
+@keyframes hero-bloom {
+  0%,
+  100% {
+    opacity: 0.71; /* 0.14 * .71 ≈ .10 effective */
+  }
+  50% {
+    opacity: 1.14; /* ≈ .16 effective */
+  }
+}
+
+/* Film grain: kills gradient banding, adds texture. Band only. */
+.hero-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Letterbox rule: the only frame allowed. */
+.hero-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(245, 200, 66, 0.28);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-band img.is-loaded {
+    animation: none;
+    transform: none;
+  }
+  .hero-bloom {
+    animation: none;
   }
 }
 

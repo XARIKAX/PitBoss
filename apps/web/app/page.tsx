@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { Reveal } from '@/components/Reveal';
 import { OddsTable } from '@/components/OddsTable';
+import { HeroBanner } from '@/components/HeroBanner';
 
 /**
  * Home — terminal-trading dashboard.
- * Dashed masthead → hero panel with live stat rail → module chip row →
+ * Cinematic banner band → type lockup on black → stat strip → module chip row →
  * module grid (boxed panels) → The Pit odds → Be the House → House Book.
  * Shell (sidebar/topbar), footer and ticker live in the root layout.
+ * The band carries the wordmark; the H1 never sits on the art.
  */
 
 const MODULES = [
@@ -71,76 +73,52 @@ const CHIPS = [
 export default function Home() {
   return (
     <div className="pb-10">
-      {/* ---- Masthead: dashed frame, blinking cursor ---- */}
-      <header className="shell pt-6">
-        <Reveal>
-          <div className="dashed bg-ink/60 px-6 py-5">
-            <h1 className="headline text-h1">
-              The Pit<span className="text-lime">Bosses</span> Floor
-              <span className="cursor" aria-hidden />
+      {/* ---- Cinematic banner band (wordmark lives in the art) ---- */}
+      <HeroBanner />
+
+      {/* ---- Type lockup: tight to the band, on black ---- */}
+      <section className="shell mt-10">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+          <div>
+            <h1 className="headline text-display">
+              Run the floor.
+              <br />
+              Get paid in <span className="em">stock</span>.
             </h1>
-            <p className="mt-1.5 text-[13px] text-mute">
-              Every fee pays the Bosses — in real stock · Robinhood Chain mainnet
+            <p className="mt-5 max-w-xl text-[13.5px] leading-relaxed text-mute">
+              Buy a Boss. Work the Pit. Be the House. Real tokenized stocks delivered straight to
+              your Boss&apos;s onchain wallet. The worst roll on the board still returns 70% — you
+              can never lose more than 30% on a pull.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="/pit" className="btn-lime">
+                Enter the Pit →
+              </Link>
+              <Link href="/floor" className="btn-ghost">
+                Get a Boss
+              </Link>
+            </div>
+            <p className="label mt-6">
+              Provably fair · Paid in real stock · Never lose more than 30%
             </p>
           </div>
-        </Reveal>
-      </header>
 
-      {/* ---- Hero panel ---- */}
-      <section className="shell mt-4">
-        <Reveal>
-          <div className="panel relative overflow-hidden">
-            {/* glow accent */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-32 -top-40 h-96 w-96 rounded-full bg-lime/10 blur-3xl"
-            />
-            <div className="grid gap-8 p-7 sm:p-10 lg:grid-cols-[1.2fr_0.8fr]">
-              <div>
-                <span className="chip chip-lime mb-5">
-                  <span className="h-1.5 w-1.5 animate-dot rounded-full bg-lime" /> The Pit is open
-                </span>
-                <h2 className="headline text-display">
-                  Run the floor.
-                  <br />
-                  Get paid in <span className="em">stock</span>.
-                </h2>
-                <p className="mt-5 max-w-xl text-[13.5px] leading-relaxed text-mute">
-                  Buy a Boss. Work the Pit. Be the House. Real tokenized stocks delivered straight
-                  to your Boss&apos;s onchain wallet. The worst roll on the board still returns
-                  70% — you can never lose more than 30% on a pull.
-                </p>
-                <div className="mt-7 flex flex-wrap gap-3">
-                  <Link href="/pit" className="btn-lime">
-                    Ring the bell →
-                  </Link>
-                  <Link href="/floor" className="btn-ghost">
-                    Get a Boss
-                  </Link>
-                </div>
-                <p className="label mt-6">
-                  Provably fair · Paid in real stock · Never lose more than 30%
-                </p>
+          {/* Stat rail */}
+          <div className="grid content-start gap-3 sm:grid-cols-2">
+            {[
+              { l: 'House Book', v: '$2.41M', s: 'total accrued' },
+              { l: 'Edge', v: '10%', s: 'RTP 90%' },
+              { l: 'Bosses', v: '888', s: 'fixed supply' },
+              { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
+            ].map((x) => (
+              <div key={x.l} className="panel-raised px-4 py-3.5">
+                <p className="label">{x.l}</p>
+                <p className="num mt-1 font-mono text-[22px] font-semibold text-lime">{x.v}</p>
+                <p className="text-[11px] text-mute">{x.s}</p>
               </div>
-
-              {/* Stat rail */}
-              <div className="grid content-start gap-3 sm:grid-cols-2">
-                {[
-                  { l: 'House Book', v: '$2.41M', s: 'total accrued' },
-                  { l: 'Edge', v: '10%', s: 'RTP 90%' },
-                  { l: 'Bosses', v: '888', s: 'fixed supply' },
-                  { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
-                ].map((x) => (
-                  <div key={x.l} className="panel-raised px-4 py-3.5">
-                    <p className="label">{x.l}</p>
-                    <p className="num mt-1 font-mono text-[22px] font-semibold text-lime">{x.v}</p>
-                    <p className="text-[11px] text-mute">{x.s}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
-        </Reveal>
+        </div>
       </section>
 
       {/* ---- Module chip row ---- */}
