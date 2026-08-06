@@ -220,7 +220,7 @@ a {
   height: clamp(420px, 56vh, 640px);
   overflow: hidden;
   background-size: cover;
-  background-position: center 38%;
+  background-position: center 28%;
 }
 @media (max-width: 639px) {
   .hero-band {
@@ -229,22 +229,25 @@ a {
   }
 }
 
-.hero-band img {
+.hero-band img,
+.hero-band video {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 38%;
+  object-position: center 28%;
   image-rendering: auto; /* painterly-pixel: nearest-neighbor would shimmer */
   opacity: 0;
   transition: opacity 0.5s ease;
 }
-.hero-band img.is-loaded {
+.hero-band img.is-loaded,
+.hero-band video.is-loaded {
   opacity: 1;
 }
-/* Slow drift: 1.05 -> 1.0 once on load. No loop, no scroll parallax. */
-.hero-band img.is-loaded {
+/* Slow drift for the STATIC fallback only (the video carries its own motion):
+   1.05 -> 1.0 once on load. No loop, no scroll parallax. */
+.hero-band img.is-static {
   animation: hero-drift 14s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
 }
 @keyframes hero-drift {
@@ -317,6 +320,7 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero-band img.is-static,
   .hero-band img.is-loaded {
     animation: none;
     transform: none;
