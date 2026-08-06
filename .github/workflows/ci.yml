@@ -56,3 +56,38 @@ jobs:
       - run: corepack enable
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm typecheck
+
+  # Full-system deploy smoke test: Deploy.s.sol against a local anvil with
+  # mocks, verifying the deployments JSON end-to-end. Runs after the forge
+  # suite so it never competes with it for a runner slot.
+  deploy-smoke:
+    name: deploy — anvil smoke
+    needs: contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Start anvil
+        run: anvil --silent &
+      - name: Deploy full system (mocks) to anvil
+        run: |
+          forge script script/Deploy.s.sol \
+            --rpc-url http://127.0.0.1:8545 \
+            --broadcast \
+            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      - name: Verify deployments JSON
+        run: |
+          test -f deployments/deployments.31337.json
+          cat deployments/deployments.31337.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployments-anvil
+          path: contracts/deployments/deployments.31337.json

@@ -1,9 +1,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main, "claude/**"]
-    paths: ["contracts/**", ".github/workflows/deploy.yml"]
+  # The anvil smoke test lives in ci.yml (deploy-smoke job). This workflow is
+  # manual-only: the real-chain staging deploy.
   workflow_dispatch:
     inputs:
       network:
