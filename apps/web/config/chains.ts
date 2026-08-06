@@ -38,7 +38,7 @@ export const BASE_CHAIN_ID = 8453;
 
 // Env-sourced RPCs. Fall back to a public/placeholder so dev never crashes.
 const RPC_ROBINHOOD =
-  process.env.NEXT_PUBLIC_RPC_ROBINHOOD ?? 'https://rpc.robinhood.example'; // TODO: real RPC
+  process.env.NEXT_PUBLIC_RPC_ROBINHOOD ?? 'https://rpc.mainnet.chain.robinhood.com'
 const RPC_BASE = process.env.NEXT_PUBLIC_RPC_BASE ?? 'https://mainnet.base.org';
 
 // Placeholder mock stock tokens per chain (tickers mirror MockStockToken.sol).
@@ -58,7 +58,7 @@ export const CHAINS: Record<number, ChainConfig> = {
     name: 'Robinhood Chain',
     primary: true,
     rpcUrl: RPC_ROBINHOOD,
-    explorerUrl: 'https://explorer.robinhood.example', // TODO: real explorer
+    explorerUrl: 'https://robinhoodchain.blockscout.com',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
     wethAddress: robinhoodDeployments.weth,
     oracleAddress: robinhoodDeployments.oracle,
