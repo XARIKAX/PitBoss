@@ -11,6 +11,9 @@ name: Generate Art
 #   - RETRO_DIFFUSION_KEY secret set -> pixel-art-native model.
 # Test with a small range first: set from/to inputs (e.g. 1..8).
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -99,3 +102,19 @@ jobs:
             art/output/provenance.json
             art/output/preview.png
           if-no-files-found: warn
+      - name: Commit sample previews to the repo (small runs only)
+        run: |
+          COUNT=$(ls output/images 2>/dev/null | wc -l)
+          if [ "$COUNT" -gt 0 ] && [ "$COUNT" -le 16 ]; then
+            mkdir -p samples
+            cp output/images/* samples/
+            cd ..
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add art/samples
+            git commit -m "Art: sample batch previews (run ${{ github.run_id }})" || echo "nothing to commit"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push || echo "push failed (non-fatal)"
+          else
+            echo "count=$COUNT — skipping sample commit"
+          fi
