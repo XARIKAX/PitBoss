@@ -1,18 +1,31 @@
 # PitBosses — 888 collection generator
 
-Composes the 888-piece collection from pixel-art trait layers, with rarity
-weights, ERC-721 metadata, a rarity report, and a published-before-reveal
-provenance hash. Deterministic: same seed + same layers = same 888 Bosses.
+Two pipelines share one deterministic trait system (same seed = same 888):
+
+## Primary: AI batch generation (the approved painterly-pixel template look)
+
+The template's radial glow + painted shading cannot be layer-composited, so
+each Boss is rendered as one AI generation from its trait combo.
 
 ```bash
-cd art
-npm install
-node generate.mjs --sample 16   # quick check -> output/preview.png
-node generate.mjs               # full 888
+cd art && npm install
+node prompts.mjs                     # 888 trait assignments + prompts
+OPENAI_API_KEY=sk-... node generate-ai.mjs --from 1 --to 8   # test batch
+node ingest.mjs                      # metadata + rarity + provenance + preview
 ```
 
-**Everything currently in `layers/` is a geometric PLACEHOLDER** (from
-`make-placeholder-layers.mjs`) proving the pipeline. Replace with real art.
+Or run it in CI (recommended): add the `OPENAI_API_KEY` repo secret, then
+Actions -> "Generate Art" -> Run workflow. Start with from=1 to=8 to approve
+the style, then run 1..888 (4-way sharded; ~$55 at gpt-image-1 medium).
+Edit the style/trait prompt fragments in `prompts.mjs`; trait assignments are
+in `output/traits.json` and stay the metadata source of truth.
+
+## Legacy: layer compositor (flat sprite art only)
+
+`generate.mjs` composes `layers/<NN_Category>/<Trait#WEIGHT>.png` sprite
+layers — kept for a flat-art direction or dev placeholders. The current
+`layers/` content is geometric placeholder output from
+`make-placeholder-layers.mjs`.
 
 ## Layer convention
 

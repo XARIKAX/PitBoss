@@ -1,0 +1,98 @@
+name: Generate Art
+
+# Renders the 888 PitBosses via AI batch generation (painterly-pixel template
+# style). Requires the OPENAI_API_KEY repo secret (or RETRO_DIFFUSION_KEY —
+# adjust the env below). Sharded 4-way; a final job merges, ingests (metadata,
+# rarity, provenance, preview) and uploads the complete collection artifact.
+#
+# Rough cost with gpt-image-1 at medium quality: ~888 x $0.06 ≈ $55.
+# Test with a small range first: set from/to inputs (e.g. 1..8).
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "First token id"
+        required: true
+        default: "1"
+      to:
+        description: "Last token id"
+        required: true
+        default: "888"
+
+jobs:
+  shard:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [0, 1, 2, 3]
+    defaults:
+      run:
+        working-directory: art
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build prompts
+        run: node prompts.mjs
+      - name: Generate shard ${{ matrix.shard }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RETRO_DIFFUSION_KEY: ${{ secrets.RETRO_DIFFUSION_KEY }}
+        run: |
+          FROM=${{ inputs.from }}
+          TO=${{ inputs.to }}
+          COUNT=$(( TO - FROM + 1 ))
+          PER=$(( (COUNT + 3) / 4 ))
+          S_FROM=$(( FROM + PER * ${{ matrix.shard }} ))
+          S_TO=$(( S_FROM + PER - 1 ))
+          if [ $S_TO -gt $TO ]; then S_TO=$TO; fi
+          if [ $S_FROM -gt $TO ]; then echo "shard empty"; exit 0; fi
+          echo "shard ${{ matrix.shard }}: $S_FROM..$S_TO"
+          node generate-ai.mjs --from $S_FROM --to $S_TO
+      - uses: actions/upload-artifact@v4
+        with:
+          name: images-shard-${{ matrix.shard }}
+          path: art/output/images
+          if-no-files-found: ignore
+
+  ingest:
+    needs: shard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: art
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build prompts (traits.json)
+        run: node prompts.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: images-shard-*
+          path: art/output/images
+          merge-multiple: true
+      - name: Ingest (metadata, rarity, provenance, preview)
+        run: |
+          ls output/images | wc -l
+          # Partial ranges: ingest only when the full set is present.
+          if [ "$(ls output/images | wc -l)" -eq 888 ]; then
+            node ingest.mjs
+          else
+            echo "partial set — skipping full ingest (preview only)"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pitbosses-collection
+          path: |
+            art/output/images
+            art/output/metadata
+            art/output/rarity.json
+            art/output/provenance.json
+            art/output/preview.png
+          if-no-files-found: warn
