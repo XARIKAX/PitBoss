@@ -16,7 +16,7 @@ node ingest.mjs                      # metadata + rarity + provenance + preview
 
 Or run it in CI (recommended): add the `OPENAI_API_KEY` repo secret, then
 Actions -> "Generate Art" -> Run workflow. Start with from=1 to=8 to approve
-the style, then run 1..888 (4-way sharded; ~$55 at gpt-image-1 medium).
+the style, then run 1..888 (4-way sharded; FREE via pollinations.ai by default — no key needed; OPENAI_API_KEY optional for tighter style control ~$55).
 Edit the style/trait prompt fragments in `prompts.mjs`; trait assignments are
 in `output/traits.json` and stay the metadata source of truth.
 

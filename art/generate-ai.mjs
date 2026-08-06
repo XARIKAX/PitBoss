@@ -33,10 +33,7 @@ const TO = flag('to', Infinity);
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const RETRO_KEY = process.env.RETRO_DIFFUSION_KEY;
-if (!OPENAI_KEY && !RETRO_KEY) {
-  console.error('Set OPENAI_API_KEY or RETRO_DIFFUSION_KEY.');
-  process.exit(1);
-}
+// No key at all -> free provider (pollinations.ai, FLUX-based, rate-limited).
 
 async function genOpenAI(prompt) {
   const res = await fetch('https://api.openai.com/v1/images/generations', {
@@ -66,7 +63,25 @@ async function genRetro(prompt) {
   return Buffer.from(data.base64_images[0], 'base64');
 }
 
-const generate = OPENAI_KEY ? genOpenAI : genRetro;
+/**
+ * FREE provider: pollinations.ai — no API key, FLUX-based. Deterministic per
+ * token via the seed param. Politely rate-limited (pause between calls).
+ */
+async function genPollinations(prompt, id) {
+  const url =
+    'https://image.pollinations.ai/prompt/' +
+    encodeURIComponent(prompt) +
+    `?width=1024&height=1024&seed=${100000 + id}&model=flux&nologo=true`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'pitbosses-art/1.0' } });
+  if (!res.ok) throw new Error(`pollinations ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length < 10_000) throw new Error('pollinations returned a suspiciously small file');
+  await new Promise((r) => setTimeout(r, 6000)); // stay polite on the free tier
+  return buf;
+}
+
+const generate = OPENAI_KEY ? genOpenAI : RETRO_KEY ? genRetro : genPollinations;
+console.log(`provider: ${OPENAI_KEY ? 'openai' : RETRO_KEY ? 'retro-diffusion' : 'pollinations (free)'}`);
 
 async function withRetry(fn, tries = 4) {
   for (let i = 0; ; i++) {
@@ -93,7 +108,7 @@ for await (const line of rl) {
     skipped++;
     continue;
   }
-  const buf = await withRetry(() => generate(prompt));
+  const buf = await withRetry(() => generate(prompt, id));
   writeFileSync(file, buf);
   done++;
   console.log(`generated #${id} (${done} new, ${skipped} skipped)`);

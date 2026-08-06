@@ -1,11 +1,14 @@
 name: Generate Art
 
 # Renders the 888 PitBosses via AI batch generation (painterly-pixel template
-# style). Requires the OPENAI_API_KEY repo secret (or RETRO_DIFFUSION_KEY —
-# adjust the env below). Sharded 4-way; a final job merges, ingests (metadata,
-# rarity, provenance, preview) and uploads the complete collection artifact.
+# style). Sharded 4-way; a final job merges, ingests (metadata, rarity,
+# provenance, preview) and uploads the complete collection artifact.
 #
-# Rough cost with gpt-image-1 at medium quality: ~888 x $0.06 ≈ $55.
+# Providers (auto-selected in art/generate-ai.mjs):
+#   - FREE default: pollinations.ai (FLUX) — no secret needed, rate-limited
+#     (~6s/image => full 888 ≈ 25 min per shard, 4 shards).
+#   - OPENAI_API_KEY secret set -> gpt-image-1 (~$55 for 888, tighter style control).
+#   - RETRO_DIFFUSION_KEY secret set -> pixel-art-native model.
 # Test with a small range first: set from/to inputs (e.g. 1..8).
 
 on:
