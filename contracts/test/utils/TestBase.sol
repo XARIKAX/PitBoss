@@ -139,22 +139,27 @@ abstract contract TestBase is Test {
     // -------- helpers --------
 
     /// @notice Mint a Boss to `who` via the AMM (approves + pays fees).
+    /// @dev Values are hoisted before vm.prank: a view call would otherwise
+    ///      consume the prank and the transfer would run as the default sender.
     function buyBoss(address who) internal returns (uint256 tokenId) {
+        uint256 price = amm.PRICE_PIT();
+        uint256 fee = amm.buyFee();
         vm.prank(treasury);
-        pit.transfer(who, amm.PRICE_PIT());
+        pit.transfer(who, price);
         vm.deal(who, who.balance + 1 ether);
         vm.startPrank(who);
-        pit.approve(address(amm), amm.PRICE_PIT());
-        tokenId = amm.buyNext{value: amm.buyFee()}();
+        pit.approve(address(amm), price);
+        tokenId = amm.buyNext{value: fee}();
         vm.stopPrank();
     }
 
     /// @notice Activate a Boss owned by `who`.
     function activateBoss(address who, uint256 tokenId) internal {
+        uint256 fee = activation.activationFee();
         vm.prank(treasury);
-        pit.transfer(who, activation.activationFee());
+        pit.transfer(who, fee);
         vm.startPrank(who);
-        pit.approve(address(activation), activation.activationFee());
+        pit.approve(address(activation), fee);
         activation.activate(tokenId);
         vm.stopPrank();
     }

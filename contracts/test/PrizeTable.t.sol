@@ -17,6 +17,22 @@ contract PrizeTableHarness {
     function oddsBps() external pure returns (uint16[21] memory) {
         return PrizeTable.oddsBps();
     }
+
+    /// @dev Sample a chunk of the distribution in its own call frame. EVM memory
+    ///      is never freed within a frame, so sampling everything in one frame
+    ///      runs out of memory (MemoryOOG); chunked external calls each start
+    ///      with fresh memory.
+    function countChunk(uint256 seed, uint256 start, uint256 n)
+        external
+        pure
+        returns (uint256[21] memory counts)
+    {
+        for (uint256 i; i < n; ++i) {
+            uint256 word = uint256(keccak256(abi.encode(seed, start + i)));
+            (, uint256 idx) = PrizeTable.multiplierFor(word);
+            counts[idx] += 1;
+        }
+    }
 }
 
 contract PrizeTableTest is Test {
@@ -69,15 +85,15 @@ contract PrizeTableTest is Test {
     ///         table yields chi-square near the 20-dof mean (~20); the generous
     ///         bound catches gross deviations while tolerating sampling noise.
     function test_DistributionChiSquare() public view {
-        uint256 N = 200_000;
+        uint256 N = 50_000; // smallest expected count = 4bps * 50k = 20 (chi2-valid)
+        uint256 CHUNK = 1_000; // per-frame bound so memory never OOGs
         uint16[21] memory o = h.oddsBps();
         uint256[21] memory obs;
 
         uint256 seed = uint256(keccak256("pitbosses-prize-fuzz"));
-        for (uint256 i; i < N; ++i) {
-            uint256 word = uint256(keccak256(abi.encode(seed, i)));
-            (, uint256 idx) = h.multiplierFor(word);
-            obs[idx] += 1;
+        for (uint256 c; c < N / CHUNK; ++c) {
+            uint256[21] memory part = h.countChunk(seed, c * CHUNK, CHUNK);
+            for (uint256 i; i < 21; ++i) obs[i] += part[i];
         }
 
         // chi-square scaled by 1e6 for integer precision.
