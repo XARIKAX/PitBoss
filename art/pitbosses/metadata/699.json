@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #699",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "ipfs://REPLACE_CID/699.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Midnight Blue"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Tan"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "White Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Grey Slick"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Eye Patch"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigar"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

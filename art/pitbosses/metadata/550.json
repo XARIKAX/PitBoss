@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #550",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "ipfs://REPLACE_CID/550.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Olive"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit White Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Buzzcut"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Purple Gaze"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Face Scar"
+    }
+  ]
+}

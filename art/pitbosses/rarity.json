@@ -1,0 +1,85 @@
+{
+  "Background": {
+    "Velvet Purple": 105,
+    "Smoke Brown": 244,
+    "Casino Green": 134,
+    "Charcoal": 102,
+    "Blood Red": 101,
+    "Neon Pit": 26,
+    "Midnight Blue": 123,
+    "Vault Gold": 53
+  },
+  "Skin": {
+    "Tan": 134,
+    "Fair": 165,
+    "Dark": 142,
+    "Brown": 147,
+    "Pale": 131,
+    "Gold": 11,
+    "Olive": 141,
+    "Zombie": 17
+  },
+  "Clothing": {
+    "Shirt Suspenders": 84,
+    "Black Suit Black Tie": 93,
+    "Green Suit Pink Tie": 102,
+    "Tuxedo": 52,
+    "Green Tracksuit": 37,
+    "Black Suit White Tie": 98,
+    "Black Turtleneck": 79,
+    "Dealer Vest": 45,
+    "Black Suit Gold Tie": 65,
+    "Purple Suit": 86,
+    "Red Tracksuit": 39,
+    "Pinstripe Suit": 62,
+    "White Suit": 46
+  },
+  "Headwear": {
+    "Curtains": 71,
+    "Green Messy": 71,
+    "Black Fedora": 58,
+    "Red Spiky": 53,
+    "Golden Crown": 13,
+    "Slicked Back": 85,
+    "Dealer Visor": 38,
+    "Bald": 57,
+    "Purple Fedora": 76,
+    "Afro": 57,
+    "Mohawk": 42,
+    "Backwards Cap": 51,
+    "Buzzcut": 64,
+    "Blue Durag": 58,
+    "Grey Slick": 64,
+    "Ponytail": 30
+  },
+  "Eyes": {
+    "Rim Glasses": 129,
+    "None": 388,
+    "Purple Gaze": 56,
+    "Black Shades": 173,
+    "Gold Shades": 75,
+    "Eye Patch": 55,
+    "Laser Eyes": 12
+  },
+  "Mouth": {
+    "Cigar": 84,
+    "Neutral": 362,
+    "Smirk": 198,
+    "Frown": 72,
+    "Cigarette": 136,
+    "Gold Grill": 36
+  },
+  "Jewelry": {
+    "Chain + Earring": 78,
+    "None": 442,
+    "Gold Chain": 211,
+    "Gold Earring": 109,
+    "Diamond Chain": 48
+  },
+  "Extra": {
+    "Red Nose": 37,
+    "None": 773,
+    "Face Scar": 59,
+    "Teardrop": 19
+  }
+}

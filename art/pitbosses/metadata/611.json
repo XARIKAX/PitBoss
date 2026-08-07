@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #611",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "ipfs://REPLACE_CID/611.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Olive"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Red Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Black Fedora"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Laser Eyes"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #355",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "ipfs://REPLACE_CID/355.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Vault Gold"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Dark"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Shirt Suspenders"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Green Messy"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}
