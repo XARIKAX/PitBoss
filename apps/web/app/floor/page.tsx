@@ -38,6 +38,7 @@ export default function FloorPage() {
 
       {/* GET A BOSS */}
       <Section label="Get a Boss" title="Buy" emphasis="or snipe.">
+        <BossGallery />
         {!ammLive ? (
           <EmptyState
             title="AMM not deployed"
@@ -73,6 +74,36 @@ export default function FloorPage() {
         <ActivateCard />
       </Section>
     </ChainGuard>
+  );
+}
+
+/* ----------------------------------------------------------------- gallery */
+
+/** First 10 Bosses from the genesis set, straight out of the generator. */
+function BossGallery() {
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      {Array.from({ length: 10 }, (_, i) => i + 1).map((id) => (
+        <figure
+          key={id}
+          className="group overflow-hidden rounded-xl border border-line bg-black/40 transition hover:border-lime/50"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/bosses/${id}.png`}
+            alt={`PitBoss #${id}`}
+            width={960}
+            height={960}
+            loading="lazy"
+            className="aspect-square w-full [image-rendering:pixelated]"
+          />
+          <figcaption className="data flex items-center justify-between px-3 py-2 text-xs">
+            <span className="text-mute">PitBoss</span>
+            <span className="text-lime">#{id}</span>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
   );
 }
 
