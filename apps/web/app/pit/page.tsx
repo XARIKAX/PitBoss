@@ -119,43 +119,251 @@ export default function PitPage() {
         lede="Buy a ticket, choose a lane, roll. Every outcome maps from a landed entropy word by a pure function you can recompute."
       />
 
-      {/* MACHINE GRID */}
-      <Section label="Machines" title="The" emphasis="grid.">
-        {!isDeployed(c.degenRollFactory.address) ? (
-          <EmptyState
-            title="Not deployed"
-            hint="The DegenRollFactory has no address on this chain yet. Machines appear here once deployments land."
-          />
-        ) : machines.isLoading ? (
-          <p className="data text-sm text-mute">Loading machines…</p>
-        ) : list.length === 0 ? (
-          <EmptyState
-            title="No machines yet"
-            hint="No DegenRoll machines have been created on this chain. The factory is live — machines show here the moment one exists."
-          />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {list.map((m, idx) => (
-              <CabinetTile
-                key={m.address}
-                m={m}
-                idx={idx}
-                active={machine != null && m.address === machine.address}
-                onSelect={() => setSelected(m.address)}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {machine ? (
-        <MachinePanels machine={machine} ticket={ticket} setTicket={setTicket} ticketNum={ticketNum} />
+      {!isDeployed(c.degenRollFactory.address) || (!machines.isLoading && list.length === 0) ? (
+        <DemoPit ticket={ticket} setTicket={setTicket} ticketNum={ticketNum} />
       ) : (
-        <Section label="Odds" title="The" emphasis="board.">
-          <OddsLadder ticket={ticketNum || undefined} />
-        </Section>
+        <>
+          <Section label="Machines" title="The" emphasis="grid.">
+            {machines.isLoading ? (
+              <p className="data text-sm text-mute">Loading machines…</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {list.map((m, idx) => (
+                  <CabinetTile
+                    key={m.address}
+                    m={m}
+                    idx={idx}
+                    active={machine != null && m.address === machine.address}
+                    onSelect={() => setSelected(m.address)}
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+
+          {machine ? (
+            <MachinePanels machine={machine} ticket={ticket} setTicket={setTicket} ticketNum={ticketNum} />
+          ) : null}
+        </>
       )}
     </ChainGuard>
+  );
+}
+
+/* ------------------------------------------------------------- demo floor */
+
+/**
+ * The casino floor, simulated. Renders whenever no machines exist on the
+ * connected chain: same cabinets, reel and board as the live floor, with
+ * rolls drawn locally at the real prize-table odds. Flagged DEMO throughout;
+ * the real floor replaces it automatically once deployments land.
+ */
+type DemoMachine = { symbol: string; name: string; bank: string; free: number; boss: number };
+
+const DEMO_MACHINES: DemoMachine[] = [
+  { symbol: 'NVDA', name: 'Nvidia', bank: '412,000', free: 61, boss: 2 },
+  { symbol: 'TSLA', name: 'Tesla', bank: '268,500', free: 44, boss: 5 },
+  { symbol: 'GME', name: 'GameStop', bank: '97,400', free: 27, boss: 8 },
+  { symbol: 'AAPL', name: 'Apple', bank: '154,200', free: 52, boss: 4 },
+];
+
+const DEMO_SEED = [
+  { id: 4521, milliX: 10000, prizeText: 'Ξ0.1000 of NVDA' },
+  { id: 888, milliX: 1500, prizeText: 'Ξ0.0150 of TSLA' },
+  { id: 2047, milliX: 750, prizeText: 'Ξ0.0075 of GME' },
+  { id: 1312, milliX: 25000, prizeText: 'Ξ0.2500 of NVDA' },
+  { id: 3690, milliX: 2000, prizeText: 'Ξ0.0200 of TSLA' },
+  { id: 117, milliX: 700, prizeText: 'Ξ0.0070 of AAPL' },
+  { id: 2999, milliX: 5000, prizeText: 'Ξ0.0500 of GME' },
+  { id: 666, milliX: 50000, prizeText: 'Ξ0.5000 of TSLA' },
+];
+
+/** Sample a prize-table row at its real odds. */
+function demoDraw(): number {
+  let r = Math.random() * 100;
+  for (let i = 0; i < PRIZE_TABLE.length; i++) {
+    r -= PRIZE_TABLE[i].oddsPct;
+    if (r < 0) return i;
+  }
+  return 0;
+}
+
+function DemoPit({
+  ticket,
+  setTicket,
+  ticketNum,
+}: {
+  ticket: string;
+  setTicket: (v: string) => void;
+  ticketNum: number;
+}) {
+  const [sel, setSel] = useState(0);
+  const [lane, setLane] = useState<0 | 1>(0);
+  const [phase, setPhase] = useState<ReelPhase>('idle');
+  const [result, setResult] = useState<ReelResult>(null);
+  const [feed, setFeed] = useState(DEMO_SEED);
+  const dm = DEMO_MACHINES[sel];
+
+  function selectMachine(i: number) {
+    setSel(i);
+    setPhase('idle');
+    setResult(null);
+  }
+
+  function pull() {
+    if (phase === 'spinning') return;
+    setPhase('spinning');
+    const sym = dm.symbol;
+    const t = ticketNum || 0.01;
+    setTimeout(() => {
+      const i = demoDraw();
+      const milliX = Math.round(PRIZE_TABLE[i].multiplier * 1000);
+      const prizeText = `Ξ${(t * PRIZE_TABLE[i].multiplier).toFixed(4)} of ${sym}`;
+      setResult({ milliX, prizeText });
+      setPhase('landed');
+      setFeed((f) =>
+        [{ id: 1000 + Math.floor(Math.random() * 8999), milliX, prizeText }, ...f].slice(0, 14),
+      );
+    }, 1400);
+  }
+
+  const items = [...feed, ...feed];
+
+  return (
+    <>
+      <Section label="Machines" title="The" emphasis="floor.">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gold/[0.05] px-4 py-3">
+          <span className="chip border-gold/60 text-gold">DEMO MODE</span>
+          <p className="text-xs text-mute">
+            Contracts aren&apos;t deployed on this chain yet — this floor is a simulation running
+            the real odds table. Real machines replace it automatically at deployment.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {DEMO_MACHINES.map((m, i) => (
+            <button
+              key={m.symbol}
+              onClick={() => selectMachine(i)}
+              className={`card text-left transition-colors ${
+                i === sel ? 'border-limeSoft' : 'hover:border-lime/40'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="headline text-lg">{m.symbol}</p>
+                <span className="data inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+                  sim
+                </span>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/bosses/${m.boss}.png`}
+                  alt={`PitBoss #${m.boss}`}
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 rounded-lg border border-line [image-rendering:pixelated]"
+                />
+                <div>
+                  <p className="eyebrow">pit boss on duty</p>
+                  <p className="data mt-0.5 text-xs text-mute">
+                    Boss #{m.boss} · earns 2.5% of the action
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3.5">
+                <div className="eyebrow flex justify-between">
+                  <span>bankroll</span>
+                  <span className="num">
+                    {m.bank} {m.symbol}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/60">
+                  <div
+                    className="h-full bg-gradient-to-r from-lime to-gold"
+                    style={{ width: `${m.free}%` }}
+                  />
+                </div>
+                <p className="eyebrow mt-1.5">{m.free}% free to win</p>
+              </div>
+              <p className="data mt-3 text-xs text-mute">{m.name} · machine {i + 1}</p>
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section label={`${dm.symbol} Pit`} title="Pull the" emphasis="machine.">
+        <div className="mb-5 overflow-hidden rounded-xl border border-line bg-lime/[0.03]">
+          <div className="flex w-max gap-10 whitespace-nowrap px-4 py-2 animate-ticker">
+            {items.map((r, i) => {
+              const cls =
+                r.milliX >= 15000 ? 'text-gold' : r.milliX >= 1000 ? 'text-acid' : 'text-mute';
+              return (
+                <span key={i} className={`data text-xs ${cls}`}>
+                  round #{r.id} pulled {(r.milliX / 1000).toFixed(2)}× · +{r.prizeText}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <p className="headline text-[14px]">{dm.symbol} · machine</p>
+              <span className="data rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
+                simulated
+              </span>
+            </div>
+
+            <div className="mt-4">
+              <RollReel phase={phase} result={result} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {([0, 1] as const).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLane(l)}
+                  className={`rounded-xl border px-4 py-3 text-sm ${
+                    lane === l ? 'border-lime text-lime' : 'border-line text-mute hover:text-paper'
+                  }`}
+                >
+                  {l === 0 ? 'Instant' : 'Vault'} lane
+                </button>
+              ))}
+            </div>
+
+            <label className="mt-4 block">
+              <span className="eyebrow">Ticket size (ETH)</span>
+              <input
+                value={ticket}
+                onChange={(e) => setTicket(e.target.value)}
+                inputMode="decimal"
+                className="data mt-1 w-full rounded-xl border border-line bg-black/40 px-4 py-3 text-sm"
+              />
+            </label>
+
+            <button
+              onClick={pull}
+              disabled={phase === 'spinning'}
+              className="pill-lime mt-4 w-full disabled:opacity-50"
+            >
+              {phase === 'spinning' ? 'Rolling…' : 'Pull the machine'}
+            </button>
+            <p className="eyebrow mt-3">demo roll · real odds · no wallet needed</p>
+          </div>
+
+          <div>
+            <p className="eyebrow mb-3">The board · 21 rungs · one in a thousand hits 50×</p>
+            <OddsLadder
+              ticket={ticketNum || undefined}
+              lockIndex={phase !== 'spinning' ? lockIndexFor(result?.milliX) : null}
+            />
+          </div>
+        </div>
+      </Section>
+    </>
   );
 }
 
