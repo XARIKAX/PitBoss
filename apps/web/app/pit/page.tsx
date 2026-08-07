@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
-import { formatEther, parseAbiItem, parseEther, type Address } from 'viem';
+import { formatEther, parseAbiItem, parseEther, parseEventLogs, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
-import { OddsTable } from '@/components/OddsTable';
+import { OddsLadder } from '@/components/OddsLadder';
+import { RollReel, type ReelPhase, type ReelResult } from '@/components/RollReel';
+import { PRIZE_TABLE } from '@/lib/prizeTable';
 import { ABIS, readMany, safeRead, useContracts, useRead, type ContractRef } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed, PLACEHOLDER } from '@/lib/deployments';
@@ -133,23 +135,15 @@ export default function PitPage() {
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {list.map((m) => {
-              const active = machine != null && m.address === machine.address;
-              return (
-                <button
-                  key={m.address}
-                  onClick={() => setSelected(m.address)}
-                  className={`card text-left transition-colors ${active ? 'border-lime' : 'hover:border-lime/40'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="data text-sm">{m.symbol}</p>
-                    <EntropyBadge machine={{ address: m.address, abi: ABIS.degenRoll }} />
-                  </div>
-                  <p className="headline mt-3 text-xl">{m.symbol} Pit</p>
-                  <p className="data mt-2 text-xs text-mute">{shortAddr(m.address)}</p>
-                </button>
-              );
-            })}
+            {list.map((m, idx) => (
+              <CabinetTile
+                key={m.address}
+                m={m}
+                idx={idx}
+                active={machine != null && m.address === machine.address}
+                onSelect={() => setSelected(m.address)}
+              />
+            ))}
           </div>
         )}
       </Section>
@@ -157,15 +151,133 @@ export default function PitPage() {
       {machine ? (
         <MachinePanels machine={machine} ticket={ticket} setTicket={setTicket} ticketNum={ticketNum} />
       ) : (
-        <Section label="Odds" title="The" emphasis="table.">
-          <OddsTable ticket={ticketNum} />
+        <Section label="Odds" title="The" emphasis="board.">
+          <OddsLadder ticket={ticketNum || undefined} />
         </Section>
       )}
     </ChainGuard>
   );
 }
 
+/* -------------------------------------------------------------- cabinets */
+
+/** Machine tile as a slot cabinet: marquee, boss on duty, bankroll meter. */
+function CabinetTile({
+  m,
+  idx,
+  active,
+  onSelect,
+}: {
+  m: Machine;
+  idx: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const ref: ContractRef = useMemo(() => ({ address: m.address, abi: ABIS.degenRoll }), [m.address]);
+  const total = useRead<bigint>({ contract: ref, functionName: 'totalBankrollStock', refetchInterval: 30_000 });
+  const free = useRead<bigint>({ contract: ref, functionName: 'freeStock', refetchInterval: 30_000 });
+  const pct =
+    total.data != null && total.data > 0n && free.data != null
+      ? Number((free.data * 100n) / total.data)
+      : null;
+  const boss = (idx % 10) + 1;
+  return (
+    <button
+      onClick={onSelect}
+      className={`card text-left transition-colors ${active ? 'border-limeSoft' : 'hover:border-lime/40'}`}
+    >
+      <div className="flex items-center justify-between">
+        <p className="headline text-lg">{m.symbol}</p>
+        <EntropyBadge machine={ref} />
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/bosses/${boss}.png`}
+          alt={`PitBoss #${boss}`}
+          width={40}
+          height={40}
+          className="h-10 w-10 rounded-lg border border-line [image-rendering:pixelated]"
+        />
+        <div>
+          <p className="eyebrow">pit boss on duty</p>
+          <p className="data mt-0.5 text-xs text-mute">Boss #{boss} · earns 2.5% of the action</p>
+        </div>
+      </div>
+      <div className="mt-3.5">
+        <div className="eyebrow flex justify-between">
+          <span>bankroll</span>
+          <span className="num">
+            {total.data != null
+              ? Number(formatEther(total.data)).toLocaleString(undefined, { maximumFractionDigits: 0 })
+              : '…'}{' '}
+            {m.symbol}
+          </span>
+        </div>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/60">
+          <div
+            className="h-full bg-gradient-to-r from-lime to-gold transition-all duration-700"
+            style={{ width: `${pct ?? 0}%` }}
+          />
+        </div>
+        <p className="eyebrow mt-1.5">{pct != null ? `${pct}% free to win` : '…'}</p>
+      </div>
+      <p className="data mt-3 text-xs text-mute">{shortAddr(m.address)}</p>
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------ win ticker */
+
+function useRecentRolls(machine: Address) {
+  const { chainId } = useContracts();
+  const client = usePublicClient();
+  return useQuery({
+    queryKey: ['pitRecent', chainId, machine],
+    enabled: Boolean(client),
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const logs = await client!.getLogs({ address: machine, event: SETTLED_EVENT, fromBlock: 0n });
+      return logs
+        .slice(-14)
+        .reverse()
+        .map((l) => ({
+          roundId: l.args.roundId ?? 0n,
+          milliX: Number(l.args.milliX ?? 0n),
+          prize: l.args.prize ?? 0n,
+        }));
+    },
+  });
+}
+
+/** Streams recent settles across the marquee — the winner board at the door. */
+function WinTicker({ machine }: { machine: Machine }) {
+  const q = useRecentRolls(machine.address);
+  const rolls = q.data ?? [];
+  if (rolls.length === 0) return null;
+  const items = [...rolls, ...rolls];
+  return (
+    <div className="mb-5 overflow-hidden rounded-xl border border-line bg-lime/[0.03]">
+      <div className="flex w-max gap-10 whitespace-nowrap px-4 py-2 animate-ticker">
+        {items.map((r, i) => {
+          const cls =
+            r.milliX >= 15000 ? 'text-gold' : r.milliX >= 1000 ? 'text-acid' : 'text-mute';
+          return (
+            <span key={i} className={`data text-xs ${cls}`}>
+              round #{r.roundId.toString()} pulled {(r.milliX / 1000).toFixed(2)}× · +
+              {Number(formatEther(r.prize)).toFixed(3)} {machine.symbol}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------ per machine */
+
+const lockIndexFor = (milliX: number | null | undefined) =>
+  milliX == null ? null : PRIZE_TABLE.findIndex((r) => Math.round(r.multiplier * 1000) === milliX);
 
 function MachinePanels({
   machine,
@@ -182,11 +294,49 @@ function MachinePanels({
     () => ({ address: machine.address, abi: ABIS.degenRoll }),
     [machine.address],
   );
+  const rounds = useMyRounds(machine.address);
+  const [phase, setPhase] = useState<ReelPhase>('idle');
+  const [live, setLive] = useState<ReelResult>(null);
+
+  // Reset the reel when switching machines.
+  useEffect(() => {
+    setPhase('idle');
+    setLive(null);
+  }, [machine.address]);
+
+  const last = rounds.data?.lastSettled ?? null;
+  const result: ReelResult =
+    live ??
+    (last
+      ? {
+          milliX: Number(last.milliX),
+          prizeText: `${Number(formatEther(last.prize)).toFixed(4)} ${machine.symbol}`,
+        }
+      : null);
+
   return (
     <>
-      <TicketSection machine={machine} m={ref} ticket={ticket} setTicket={setTicket} ticketNum={ticketNum} />
+      <TicketSection
+        machine={machine}
+        m={ref}
+        ticket={ticket}
+        setTicket={setTicket}
+        ticketNum={ticketNum}
+        phase={phase}
+        result={result}
+      />
       <BankrollSection machine={machine} m={ref} />
-      <OpenRoundsSection machine={machine} m={ref} />
+      <OpenRoundsSection
+        machine={machine}
+        m={ref}
+        q={rounds}
+        onSpin={() => setPhase('spinning')}
+        onLand={(r) => {
+          setLive(r);
+          setPhase('landed');
+        }}
+        onAbort={() => setPhase('idle')}
+      />
     </>
   );
 }
@@ -197,12 +347,16 @@ function TicketSection({
   ticket,
   setTicket,
   ticketNum,
+  phase,
+  result,
 }: {
   machine: Machine;
   m: ContractRef;
   ticket: string;
   setTicket: (v: string) => void;
   ticketNum: number;
+  phase: ReelPhase;
+  result: ReelResult;
 }) {
   const { isConnected, address } = useAccount();
   const { c } = useContracts();
@@ -264,11 +418,16 @@ function TicketSection({
 
   return (
     <Section label={`${machine.symbol} Pit`} title="Buy a" emphasis="ticket.">
+      <WinTicker machine={machine} />
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className="card">
           <div className="flex items-center justify-between">
-            <p className="headline text-[14px]">Ticket</p>
+            <p className="headline text-[14px]">{machine.symbol} · machine</p>
             <EntropyBadge machine={m} />
+          </div>
+
+          <div className="mt-4">
+            <RollReel phase={phase} result={result} />
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -347,8 +506,11 @@ function TicketSection({
         </div>
 
         <div>
-          <p className="eyebrow mb-3">Live odds · payout on {ticketNum || 0} ETH ticket</p>
-          <OddsTable ticket={ticketNum} />
+          <p className="eyebrow mb-3">The board · 21 rungs · one in a thousand hits 50×</p>
+          <OddsLadder
+            ticket={ticketNum || undefined}
+            lockIndex={phase !== 'spinning' ? lockIndexFor(result?.milliX) : null}
+          />
         </div>
       </div>
     </Section>
@@ -581,30 +743,56 @@ function useMyRounds(machine: Address) {
   });
 }
 
-function OpenRoundsSection({ machine, m }: { machine: Machine; m: ContractRef }) {
+function OpenRoundsSection({
+  machine,
+  m,
+  q,
+  onSpin,
+  onLand,
+  onAbort,
+}: {
+  machine: Machine;
+  m: ContractRef;
+  q: ReturnType<typeof useMyRounds>;
+  onSpin: () => void;
+  onLand: (r: NonNullable<ReelResult>) => void;
+  onAbort: () => void;
+}) {
   const { isConnected } = useAccount();
   const { send, busy } = useTx();
-  const q = useMyRounds(machine.address);
   const now = Math.floor(Date.now() / 1000);
 
   const rounds = q.data?.rounds ?? [];
   const open = rounds.filter((r) => r.status === 1);
-  const last = q.data?.lastSettled ?? null;
+
+  /** Send settle/seal, spinning the reel and locking it onto the receipt's Settled event. */
+  async function settleWithReel(fn: 'settle' | 'sealIntoCertificate', roundId: bigint) {
+    onSpin();
+    const receipt = await send(
+      { address: m.address, abi: m.abi, functionName: fn, args: [roundId] },
+      { title: `${fn === 'settle' ? 'Settle' : 'Seal'} #${roundId.toString()}` },
+    );
+    if (!receipt) {
+      onAbort();
+      return;
+    }
+    try {
+      const [ev] = parseEventLogs({ abi: [SETTLED_EVENT], logs: receipt.logs });
+      if (ev?.args.milliX != null) {
+        onLand({
+          milliX: Number(ev.args.milliX),
+          prizeText: `${Number(formatEther(ev.args.prize ?? 0n)).toFixed(4)} ${machine.symbol}`,
+        });
+        return;
+      }
+    } catch {
+      // fall through — reads refetch anyway
+    }
+    onAbort();
+  }
 
   return (
     <Section label="Open rounds" title="In" emphasis="flight.">
-      {last ? (
-        <div className="mb-4 rounded-xl border border-line bg-black/40 p-5 text-center">
-          <p className="eyebrow">Last roll</p>
-          <p className={`data mt-2 text-4xl ${last.milliX >= 1000n ? 'text-lime' : 'text-paper'}`}>
-            {(Number(last.milliX) / 1000).toFixed(3)}×
-          </p>
-          <p className="data mt-1 text-xs text-mute">
-            prize {formatEther(last.prize)} {machine.symbol}
-          </p>
-        </div>
-      ) : null}
-
       {!isConnected ? (
         <EmptyState
           title="Connect to see your rounds"
@@ -638,29 +826,14 @@ function OpenRoundsSection({ machine, m }: { machine: Machine; m: ContractRef })
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() =>
-                        send(
-                          { address: m.address, abi: m.abi, functionName: 'settle', args: [r.roundId] },
-                          { title: `Settle #${r.roundId.toString()}` },
-                        )
-                      }
+                      onClick={() => settleWithReel('settle', r.roundId)}
                       disabled={busy || !ready}
                       className="pill-lime disabled:opacity-50"
                     >
-                      Settle
+                      Settle · roll it
                     </button>
                     <button
-                      onClick={() =>
-                        send(
-                          {
-                            address: m.address,
-                            abi: m.abi,
-                            functionName: 'sealIntoCertificate',
-                            args: [r.roundId],
-                          },
-                          { title: `Seal #${r.roundId.toString()}` },
-                        )
-                      }
+                      onClick={() => settleWithReel('sealIntoCertificate', r.roundId)}
                       disabled={busy || !ready}
                       className="pill-ghost disabled:opacity-50"
                     >

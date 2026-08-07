@@ -22,6 +22,8 @@ const config: Config = {
         lime: '#C6FF00', // primary accent
         acid: '#9EF01A', // secondary green (dots, positive)
         red: '#FF5C5C', // negative / down
+        gold: '#F5C842', // jackpot tier (15x+) only
+        ember: '#D07A5A', // sub-1x floor rows
         paper: '#EAEDE6', // primary text
         mute: '#8A8F84', // secondary text
         dim: '#565B54', // tertiary / labels
