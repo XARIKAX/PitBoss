@@ -40,14 +40,14 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
 
   const label = isPending ? 'Connecting…' : compact ? 'Connect' : 'Connect wallet';
 
-  // Only one connector available → connect directly, no picker.
+  // Only one connector available → connect directly, no picker. The button is
+  // never hard-disabled, so a hung attempt can always be retried.
   if (connectors.length <= 1) {
     const only = connectors[0];
     return (
       <button
         onClick={() => only && connect({ connector: only })}
-        disabled={isPending || !only}
-        className="pill-lime disabled:opacity-60"
+        className="pill-lime"
       >
         {label}
       </button>
@@ -56,11 +56,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
 
   return (
     <div ref={wrapRef} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        disabled={isPending}
-        className="pill-lime disabled:opacity-60"
-      >
+      <button onClick={() => setOpen((v) => !v)} className="pill-lime">
         {label}
       </button>
       {open ? (
