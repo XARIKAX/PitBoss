@@ -15,11 +15,14 @@ const nextConfig = {
       new webpack.IgnorePlugin({ resourceRegExp: /^@x402(\/|$)/ }),
     );
     // Optional native deps of WalletConnect's ws stack; harmless to skip in-browser.
+    // `pino-pretty` is an optional dev logger pulled in transitively by
+    // WalletConnect's pino logger — never needed at runtime in the browser.
     config.resolve = config.resolve || {};
     config.resolve.fallback = {
       ...(config.resolve.fallback || {}),
       'bufferutil': false,
       'utf-8-validate': false,
+      'pino-pretty': false,
     };
     return config;
   },

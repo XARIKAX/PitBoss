@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { wagmiConfig } from '@/lib/wagmi';
+import '@/lib/appkit'; // side effect: creates the Reown AppKit modal (client only)
 import { ToastProvider } from '@/components/TxToast';
 
 /**

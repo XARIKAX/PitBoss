@@ -1,16 +1,23 @@
 /**
- * wagmi v2 configuration.
+ * wagmi v2 configuration — driven by Reown AppKit.
  *
- * Chains: Robinhood Chain (primary) and Base (fallback), both defined from
+ * The wagmi Config is created by AppKit's WagmiAdapter, which also wires the
+ * full connector set (injected / MetaMask / Phantom / Coinbase / WalletConnect)
+ * behind AppKit's "Connect a Wallet" modal. This is what makes both desktop
+ * extensions AND mobile wallets work from one button.
+ *
+ * Chains: Robinhood Chain (primary) and Base (fallback), defined from
  * config/chains.ts so there is one source of truth. When
- * NEXT_PUBLIC_ENABLE_ANVIL=1 a local anvil fork (31337) is added first so dev
- * defaults to it. Connectors: injected + WalletConnect. The WalletConnect
- * project id comes from env — the connector is only added when it is present so
- * dev works without one.
+ * NEXT_PUBLIC_ENABLE_ANVIL=1 a local anvil fork (31337) is added first.
+ *
+ * The WalletConnect project id comes from env
+ * (NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID). A build-safe placeholder keeps local
+ * builds working; the real id is injected at build time on the host.
  */
-import { createConfig, http } from 'wagmi';
-import { injected, walletConnect } from 'wagmi/connectors';
-import { defineChain } from 'viem';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import { defineChain } from '@reown/appkit/networks';
+import type { AppKitNetwork } from '@reown/appkit/networks';
+import { http } from 'wagmi';
 import {
   CHAINS,
   ROBINHOOD_CHAIN_ID,
@@ -20,78 +27,67 @@ import {
   RPC_ANVIL,
 } from '@/config/chains';
 
-// Canonical Multicall3 — deployed at the same address on virtually every chain
-// (and present on anvil forks of them). viem falls back gracefully when absent.
-const MULTICALL3 = {
-  multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' as const },
-};
+// Canonical Multicall3 — deployed at the same address on virtually every chain.
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11' as const;
 
-const robinhood = defineChain({
+export const robinhood = defineChain({
   id: ROBINHOOD_CHAIN_ID,
+  caipNetworkId: `eip155:${ROBINHOOD_CHAIN_ID}`,
+  chainNamespace: 'eip155',
   name: CHAINS[ROBINHOOD_CHAIN_ID].name,
   nativeCurrency: CHAINS[ROBINHOOD_CHAIN_ID].nativeCurrency,
   rpcUrls: { default: { http: [CHAINS[ROBINHOOD_CHAIN_ID].rpcUrl] } },
   blockExplorers: {
     default: { name: 'Explorer', url: CHAINS[ROBINHOOD_CHAIN_ID].explorerUrl },
   },
-  contracts: MULTICALL3,
+  contracts: { multicall3: { address: MULTICALL3 } },
 });
 
-const base = defineChain({
+export const base = defineChain({
   id: BASE_CHAIN_ID,
+  caipNetworkId: `eip155:${BASE_CHAIN_ID}`,
+  chainNamespace: 'eip155',
   name: CHAINS[BASE_CHAIN_ID].name,
   nativeCurrency: CHAINS[BASE_CHAIN_ID].nativeCurrency,
   rpcUrls: { default: { http: [CHAINS[BASE_CHAIN_ID].rpcUrl] } },
   blockExplorers: { default: { name: 'Basescan', url: CHAINS[BASE_CHAIN_ID].explorerUrl } },
-  contracts: MULTICALL3,
+  contracts: { multicall3: { address: MULTICALL3 } },
 });
 
-const anvil = defineChain({
+export const anvil = defineChain({
   id: ANVIL_CHAIN_ID,
+  caipNetworkId: `eip155:${ANVIL_CHAIN_ID}`,
+  chainNamespace: 'eip155',
   name: 'Anvil (local)',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: { default: { http: [RPC_ANVIL] } },
-  contracts: MULTICALL3,
+  contracts: { multicall3: { address: MULTICALL3 } },
 });
-
-type AppChain = typeof robinhood | typeof base | typeof anvil;
 
 // Anvil first when enabled so disconnected reads default to the local fork.
-const chains = (ANVIL_ENABLED ? [anvil, robinhood, base] : [robinhood, base]) as [
-  AppChain,
-  ...AppChain[],
-];
+export const networks = (
+  ANVIL_ENABLED ? [anvil, robinhood, base] : [robinhood, base]
+) as [AppKitNetwork, ...AppKitNetwork[]];
 
-const wcProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+// WalletConnect / Reown project id. Non-empty placeholder keeps builds from
+// crashing when the env var is absent; the real id is injected at build time.
+export const projectId =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? 'PLACEHOLDER_PROJECT_ID';
 
-const connectors = [
-  injected({ shimDisconnect: true }),
-  ...(wcProjectId
-    ? [
-        walletConnect({
-          projectId: wcProjectId,
-          metadata: {
-            name: 'PitBosses',
-            description: 'Run the floor. Get paid in stock.',
-            url: 'https://pitbosses.xyz',
-            icons: ['https://pitbosses.xyz/hero/icon-192.png'],
-          },
-          showQrModal: true,
-        }),
-      ]
-    : []),
-];
+const transports: Record<number, ReturnType<typeof http>> = {
+  [ROBINHOOD_CHAIN_ID]: http(CHAINS[ROBINHOOD_CHAIN_ID].rpcUrl),
+  [BASE_CHAIN_ID]: http(CHAINS[BASE_CHAIN_ID].rpcUrl),
+};
+if (ANVIL_ENABLED) transports[ANVIL_CHAIN_ID] = http(RPC_ANVIL);
 
-export const wagmiConfig = createConfig({
-  chains,
-  connectors,
-  transports: {
-    [robinhood.id]: http(CHAINS[ROBINHOOD_CHAIN_ID].rpcUrl),
-    [base.id]: http(CHAINS[BASE_CHAIN_ID].rpcUrl),
-    [anvil.id]: http(RPC_ANVIL),
-  },
+export const wagmiAdapter = new WagmiAdapter({
+  networks,
+  projectId,
   ssr: true,
+  transports,
 });
+
+export const wagmiConfig = wagmiAdapter.wagmiConfig;
 
 export const APP_CHAINS = { robinhood, base, anvil };
 
