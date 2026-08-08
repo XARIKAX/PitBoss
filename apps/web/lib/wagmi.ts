@@ -73,8 +73,8 @@ const connectors = [
           metadata: {
             name: 'PitBosses',
             description: 'Run the floor. Get paid in stock.',
-            url: 'https://pitbosses.example',
-            icons: [],
+            url: 'https://pitbosses.xyz',
+            icons: ['https://pitbosses.xyz/hero/icon-192.png'],
           },
           showQrModal: true,
         }),
