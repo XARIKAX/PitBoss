@@ -467,3 +467,11 @@ a {
 ::-webkit-scrollbar-thumb:hover {
   background: #2a3128;
 }
+
+/* RainbowKit modal — match the terminal look: IBM Plex Mono + lime accent.
+   RainbowKit scopes all of its styles under [data-rk], so overriding the font
+   variable there themes the whole "Connect a Wallet" modal without touching
+   the rest of the page. */
+[data-rk] {
+  --rk-fonts-body: var(--font-mono), ui-monospace, monospace;
+}

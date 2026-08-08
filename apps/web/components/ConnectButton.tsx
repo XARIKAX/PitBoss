@@ -1,25 +1,29 @@
 'use client';
 
-import { useAppKit } from '@reown/appkit/react';
+import { useConnectModal, useAccountModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { shortAddr } from '@/lib/format';
 
 /**
  * Connect / account pill.
  *
- * Opens the Reown AppKit "Connect a Wallet" modal, which lists installed
- * extensions (MetaMask, Phantom, Coinbase) AND WalletConnect for mobile, and
- * handles QR / deep-links itself. When connected the pill shows the address and
- * opens the account view (network switch, balance, disconnect).
+ * Opens RainbowKit's "Connect a Wallet" modal, which lists installed extensions
+ * (MetaMask, Phantom, Rabby, Coinbase) AND WalletConnect for mobile, and handles
+ * QR / deep-links itself — no third-party badge. When connected the pill shows
+ * the address and opens the account modal (balance, chain, disconnect).
+ *
+ * Custom pill styling is kept by driving RainbowKit through its modal hooks
+ * rather than its default button component.
  */
 export function ConnectButton({ compact = false }: { compact?: boolean }) {
-  const { open } = useAppKit();
+  const { openConnectModal } = useConnectModal();
+  const { openAccountModal } = useAccountModal();
   const { address, isConnected } = useAccount();
 
   if (isConnected && address) {
     return (
       <button
-        onClick={() => open({ view: 'Account' })}
+        onClick={() => openAccountModal?.()}
         className="pill-ghost data"
         title={address}
       >
@@ -29,7 +33,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <button onClick={() => open()} className="pill-lime">
+    <button onClick={() => openConnectModal?.()} className="pill-lime">
       {compact ? 'Connect' : 'Connect wallet'}
     </button>
   );
