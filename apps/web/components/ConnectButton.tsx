@@ -40,6 +40,20 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
 
   const label = isPending ? 'Connecting…' : compact ? 'Connect' : 'Connect wallet';
 
+  // TEMP DIAGNOSTIC: is the WalletConnect connector present in this build?
+  // If the projectId env var didn't bake in, WC is absent and mobile can't
+  // connect. This marker lets us confirm on the phone without a console.
+  const hasWC = connectors.some((c) => /walletconnect/i.test(c.name));
+  const diag = (
+    <sup
+      className="ml-1 align-super text-[9px] font-mono"
+      style={{ color: hasWC ? '#a3e635' : '#f87171' }}
+      title={`connectors: ${connectors.map((c) => c.name).join(', ') || 'none'}`}
+    >
+      {hasWC ? 'wc✓' : 'wc✗'}
+    </sup>
+  );
+
   // Only one connector available → connect directly, no picker. The button is
   // never hard-disabled, so a hung attempt can always be retried.
   if (connectors.length <= 1) {
@@ -50,6 +64,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
         className="pill-lime"
       >
         {label}
+        {diag}
       </button>
     );
   }
@@ -58,6 +73,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean }) {
     <div ref={wrapRef} className="relative">
       <button onClick={() => setOpen((v) => !v)} className="pill-lime">
         {label}
+        {diag}
       </button>
       {open ? (
         <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-line bg-ink shadow-2xl">
