@@ -23,6 +23,11 @@ abstract contract EntropyConductorBase is IEntropyConductor {
         uint256 word;
     }
 
+    /// @dev Commitments are namespaced by the committing consumer, so a third
+    ///      party can never occupy a machine's public commitment id and brick its
+    ///      buy() (audit C2). The consumer's own calls (commit/fulfill/views) all
+    ///      resolve to its namespace via msg.sender; external verification uses the
+    ///      `*For(consumer, id)` variants.
     mapping(bytes32 => Commit) internal _commits;
 
     /// @notice Max seconds without a fulfillment before the conductor reports
@@ -34,9 +39,14 @@ abstract contract EntropyConductorBase is IEntropyConductor {
         lastFulfillAt = uint64(block.timestamp);
     }
 
+    /// @dev Storage key namespaced to the consumer that committed.
+    function _key(address consumer, bytes32 id) internal pure returns (bytes32) {
+        return keccak256(abi.encode(consumer, id));
+    }
+
     /// @inheritdoc IEntropyConductor
     function commit(bytes32 id, uint64 readyAt) external {
-        Commit storage c = _commits[id];
+        Commit storage c = _commits[_key(msg.sender, id)];
         if (c.exists) revert Errors.InvalidConfig();
         c.exists = true;
         c.readyAt = readyAt;
@@ -47,7 +57,7 @@ abstract contract EntropyConductorBase is IEntropyConductor {
 
     /// @inheritdoc IEntropyConductor
     function fulfill(bytes32 id) external returns (uint256 word) {
-        Commit storage c = _commits[id];
+        Commit storage c = _commits[_key(msg.sender, id)];
         if (!c.exists) revert Errors.RoundNotReady();
         if (c.fulfilled) return c.word;
         if (block.timestamp < c.readyAt) revert Errors.RoundNotReady();
@@ -62,9 +72,16 @@ abstract contract EntropyConductorBase is IEntropyConductor {
 
     /// @inheritdoc IEntropyConductor
     function previewWord(bytes32 id) external view returns (uint256) {
-        Commit storage c = _commits[id];
+        return previewWordFor(msg.sender, id);
+    }
+
+    /// @notice Consumer-scoped preview for external verification tooling. Gated on
+    ///         `readyAt` so an outcome cannot be read during the commit delay.
+    function previewWordFor(address consumer, bytes32 id) public view returns (uint256) {
+        Commit storage c = _commits[_key(consumer, id)];
         if (!c.exists) revert Errors.RoundNotReady();
         if (c.fulfilled) return c.word;
+        if (block.timestamp < c.readyAt) revert Errors.RoundNotReady();
         (bool ready, bytes32 material) = _material(id, c);
         if (!ready) revert Errors.RoundNotReady();
         return _deriveWord(id, material);
@@ -72,19 +89,24 @@ abstract contract EntropyConductorBase is IEntropyConductor {
 
     /// @inheritdoc IEntropyConductor
     function wordOf(bytes32 id) external view returns (uint256) {
-        Commit storage c = _commits[id];
+        return wordOfFor(msg.sender, id);
+    }
+
+    /// @notice Consumer-scoped finalized word for external verification tooling.
+    function wordOfFor(address consumer, bytes32 id) public view returns (uint256) {
+        Commit storage c = _commits[_key(consumer, id)];
         if (!c.fulfilled) revert Errors.RoundNotReady();
         return c.word;
     }
 
     /// @inheritdoc IEntropyConductor
     function isFulfilled(bytes32 id) external view returns (bool) {
-        return _commits[id].fulfilled;
+        return _commits[_key(msg.sender, id)].fulfilled;
     }
 
     /// @inheritdoc IEntropyConductor
     function isReady(bytes32 id) external view returns (bool) {
-        Commit storage c = _commits[id];
+        Commit storage c = _commits[_key(msg.sender, id)];
         if (!c.exists || block.timestamp < c.readyAt) return false;
         (bool ready,) = _material(id, c);
         return ready;

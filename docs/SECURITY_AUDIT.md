@@ -5,7 +5,7 @@
 then re-verified against source by the lead before inclusion here.
 **Date:** 2026-08-08.
 
-> **VERDICT: NO-GO for real-money deployment as-is.**
+> **ORIGINAL VERDICT: NO-GO for real-money deployment as-is.**
 > Five Critical issues, several of them deterministic (they fire on normal use,
 > not just under attack), plus a set of High-severity entropy and reward-gaming
 > problems. None of the Criticals are cosmetic; three lock or drain user funds.
@@ -13,6 +13,41 @@ then re-verified against source by the lead before inclusion here.
 > Do not put real value in until at least every Critical and High below is fixed
 > **and** re-audited independently. I wrote this code, so my own pass is a floor,
 > not a substitute for an external firm.
+
+---
+
+## Remediation status (post-fix)
+
+All five Criticals and the High-severity entropy issues have been fixed in code
+with regression tests. **The verdict is still NO-GO until an independent firm
+re-audits the changes** — an author fixing their own findings is a floor, not a
+sign-off. Staging with mock assets remains fine.
+
+| # | Status | Fix |
+|---|--------|-----|
+| C1 | ✅ Fixed | Production entropy is now push-model VRF (Chains: real chains → `ChainlinkVRF`); the coordinator lands the word automatically, so a player can't withhold fulfillment to refund a known loss. `previewWord` gated on `readyAt`. |
+| C2 | ✅ Fixed | Conductor commitments namespaced by `keccak256(consumer, id)` — a third party can't occupy a machine's id. Regression test `test_C2_CommitIsNamespacedByCaller`. |
+| C3 | ✅ Fixed | `compressBatch` is owner/keeper-gated, requires a rolled season, and records `lastCompressedSeason` so each Boss compresses at most once per season. Test `test_C3_CompressBatch_Gated`. |
+| C4 | ✅ Fixed | `LauncherFactory` now inherits `ERC721Holder`; graduation completes and raised ETH lands in the pool. Lock NFT held by the factory, sweepable via `sweepGraduationLock`. Test `test_C4_GraduationCompletes`. |
+| C5 | ✅ Fixed | `commitDraw` bounds `readyAt` to `[now+MIN, now+MAX]`; `resetDraw` clears a stalled draw after a timeout so the bar can't be frozen. Test `test_C5_BellBoundsAndReset`. |
+| H1 | ✅ Fixed | Blockhash/miner entropy confined to local dev (anvil only); real chains use VRF. |
+| H2 | ✅ Fixed | Same — VRF words don't age out of a 256-block window. |
+| H3 | ✅ Fixed | Bankroll mints permanent dead-shares on first stake and reverts zero-share mints, making first-depositor inflation unprofitable. Test `test_H3_DeadSharesAndZeroShareRevert`. |
+| H4 | ✅ Fixed | `VRFEntropyConductor` completed to a real Chainlink VRF v2.5 push consumer (request in `commit`, `rawFulfillRandomWords` callback). Test `test_H4_VRFPushModel` via `MockVRFCoordinator`. |
+| H5 | ✅ Fixed | Opening Bell selection distribution is frozen at `commitDraw`, so the winner can't be steered after the word is known. |
+| M7 | ✅ Fixed | Graduation lock NFT is held by the factory (no longer stranded) and sweepable to a treasury. |
+
+**Deferred (documented, not yet fixed):** the remaining Mediums (M1/M2 same-pool
+slippage guards, M3/M4 reward-weight gaming, M5 oracle staleness, M6 AMM PIT
+sink, M8 vested-fee bypass, M9 launch-config validation, M10/M11 ownership &
+minter) and the Low/Info list. Several overlap the open $PIT supply-vs-price
+economics decision and should be settled together before the external audit.
+
+> **Production entropy note:** real-value deployments now require a Chainlink VRF
+> v2.5 coordinator + funded subscription on the target chain, with the conductor
+> added as a consumer and `setRequestConfig` called. If the target chain has no
+> VRF, that is a launch blocker to resolve (deploy an alternative bonded
+> randomness source) — not a reason to fall back to manipulable block hashes.
 
 ---
 

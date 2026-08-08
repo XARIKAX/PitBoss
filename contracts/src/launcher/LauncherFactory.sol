@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import {LaunchToken} from "./LaunchToken.sol";
 import {ILauncher, IPoolDeployer} from "./interfaces.sol";
 import {OpeningBell} from "./OpeningBell.sol";
@@ -21,7 +22,7 @@ import {Errors} from "../lib/Errors.sol";
 /// @dev    v1 pairs against ETH; $PIT/stock pairs are a marked extension. The
 ///         bonding curve is a linear spot model (documented). Audit-scoped (holds
 ///         raised ETH until graduation).
-contract LauncherFactory is ILauncher, ReentrancyGuard, Ownable {
+contract LauncherFactory is ILauncher, ReentrancyGuard, Ownable, ERC721Holder {
     enum Curve {
         FixedPrice,
         Bonding
@@ -52,6 +53,10 @@ contract LauncherFactory is ILauncher, ReentrancyGuard, Ownable {
 
     uint256 public nextLaunchId = 1;
     mapping(uint256 => Launch) public launches;
+
+    /// @notice launchId => the lock NFT id created at graduation (held by the
+    ///         factory; sweep to a treasury with `sweepGraduationLock`).
+    mapping(uint256 => uint256) public graduationLockId;
 
     event LaunchCreated(uint256 indexed launchId, address indexed token, address indexed creator, Curve curve);
     event Bought(uint256 indexed launchId, address indexed buyer, uint256 ethIn, uint256 tokensOut, uint256 fee);
@@ -162,10 +167,26 @@ contract LauncherFactory is ILauncher, ReentrancyGuard, Ownable {
         (address pm, uint256 positionId) =
             poolDeployer.deployPoolAndMint{value: pairEth}(l.token, address(0), poolTokens);
 
-        // Auto-lock the LP permanently; fee share streams to the House Book.
+        // Auto-lock the LP permanently; fee share streams to the House Book. The
+        // factory (an ERC721Holder) safely receives the position and lock NFTs, so
+        // graduation always completes and the raised ETH lands in the pool. The
+        // lock NFT is held here and can be swept to the treasury (which can then
+        // collect its FeeShare stream) — graduation never depends on an external
+        // receiver, so it can't revert-and-lock (audit C4/#7).
         IERC721(pm).approve(address(locker), positionId);
         uint256 lockId = locker.lock(pm, positionId, LiquidityLocker.Style.Permanent, LiquidityLocker.FeeMode.FeeShare, 0);
+        graduationLockId[launchId] = lockId;
         emit Graduated(launchId, pm, positionId, lockId);
+    }
+
+    /// @notice Move a graduation lock NFT to the treasury (which can then collect
+    ///         its pool FeeShare stream). Owner-only; the target must be able to
+    ///         receive an ERC-721.
+    function sweepGraduationLock(uint256 launchId, address to) external onlyOwner {
+        if (to == address(0)) revert Errors.ZeroAddress();
+        uint256 lockId = graduationLockId[launchId];
+        if (lockId == 0) revert Errors.InvalidConfig();
+        IERC721(address(locker)).safeTransferFrom(address(this), to, lockId);
     }
 
     // -------- ILauncher views --------

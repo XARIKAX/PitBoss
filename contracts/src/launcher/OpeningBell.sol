@@ -25,18 +25,29 @@ contract OpeningBell is ReentrancyGuard, Ownable {
     uint16 public constant RINGER_TIP_BPS = 50; // 0.5%
     uint16 public constant MIN_WEIGHT_BPS = 100; // 1% floor per live token
     uint256 public constant MAX_LIVE = 128; // bound on tracked live launches
+    uint64 public constant MIN_REVEAL_DELAY = 1 minutes; // commit->reveal floor
+    uint64 public constant MAX_REVEAL_DELAY = 1 hours; // commit->reveal ceiling
+    uint64 public constant DRAW_RESET_TIMEOUT = 6 hours; // stalled draw -> resettable
 
     uint256 public bar;
     uint256 public roundNonce;
     bytes32 public activeDrawId;
     bool public drawCommitted;
+    uint64 public drawReadyAt;
 
     uint256[] public liveLaunches;
     mapping(uint256 => bool) public isTracked;
     mapping(uint256 => uint256) public feeContribution;
 
+    // Selection distribution frozen at commit time (audit H5: not re-read at ring,
+    // so the outcome can't be steered after the word is known).
+    uint256[] private _drawLaunches;
+    uint256[] private _drawWeights;
+    uint256 private _drawTotal;
+
     event BarCharged(uint256 indexed launchId, uint256 amount, uint256 bar);
     event DrawCommitted(bytes32 indexed drawId, uint64 readyAt);
+    event DrawReset(bytes32 indexed drawId);
     event BellRung(address indexed ringer, uint256 indexed launchId, uint256 spent, uint256 tip);
 
     constructor(address conductor_) Ownable(msg.sender) {
@@ -73,14 +84,41 @@ contract OpeningBell is ReentrancyGuard, Ownable {
 
     // -------- draw + ring --------
 
-    /// @notice Commit the entropy draw once the bar is live. Permissionless.
+    /// @notice Commit the entropy draw once the bar is live. Permissionless. The
+    ///         reveal delay is bounded, and the selection distribution is frozen
+    ///         here so the winner cannot be steered after the word is known.
     function commitDraw(uint64 readyAt) external {
         if (bar < barThreshold) revert Errors.BarNotFull();
         if (drawCommitted) revert Errors.InvalidConfig();
+        if (
+            readyAt < uint64(block.timestamp) + MIN_REVEAL_DELAY
+                || readyAt > uint64(block.timestamp) + MAX_REVEAL_DELAY
+        ) revert Errors.InvalidConfig();
+
+        _freezeDistribution();
+        if (_drawTotal == 0) revert Errors.NoLiveTokens();
+
         activeDrawId = keccak256(abi.encode(address(this), roundNonce));
         drawCommitted = true;
+        drawReadyAt = readyAt;
         conductor.commit(activeDrawId, readyAt);
         emit DrawCommitted(activeDrawId, readyAt);
+    }
+
+    /// @notice Reset a stalled draw (entropy never landed within the timeout) so a
+    ///         fresh draw can be committed. Cannot reset a fulfilled draw — that one
+    ///         must be rung. Prevents a permanent bar freeze (audit C5).
+    function resetDraw() external {
+        if (!drawCommitted) revert Errors.InvalidConfig();
+        if (conductor.isFulfilled(activeDrawId)) revert Errors.InvalidConfig();
+        if (block.timestamp <= uint256(drawReadyAt) + DRAW_RESET_TIMEOUT) revert Errors.WindowNotElapsed();
+        emit DrawReset(activeDrawId);
+        drawCommitted = false;
+        drawReadyAt = 0;
+        roundNonce++;
+        delete _drawLaunches;
+        delete _drawWeights;
+        _drawTotal = 0;
     }
 
     /// @notice Ring the bell: draw the target token and sweep the whole bar into its
@@ -90,8 +128,10 @@ contract OpeningBell is ReentrancyGuard, Ownable {
         if (!drawCommitted) revert Errors.RoundNotReady();
         uint256 word = conductor.fulfill(activeDrawId);
 
-        launchId = _select(word);
-        if (launchId == type(uint256).max) revert Errors.NoLiveTokens();
+        launchId = _selectFrozen(word);
+        // If the drawn launch graduated between commit and ring it's no longer a
+        // valid buyback target; let the draw be reset and re-drawn.
+        if (launchId == type(uint256).max || !launcher.isLive(launchId)) revert Errors.NoLiveTokens();
 
         uint256 pot = bar;
         uint256 tip = (pot * RINGER_TIP_BPS) / 10_000;
@@ -100,7 +140,11 @@ contract OpeningBell is ReentrancyGuard, Ownable {
         // Reset round state before external calls.
         bar = 0;
         drawCommitted = false;
+        drawReadyAt = 0;
         roundNonce++;
+        delete _drawLaunches;
+        delete _drawWeights;
+        _drawTotal = 0;
         _clearContributions();
 
         launcher.buybackInto{value: spend}(launchId);
@@ -113,12 +157,14 @@ contract OpeningBell is ReentrancyGuard, Ownable {
 
     // -------- selection --------
 
-    /// @notice Weighted target selection: weight = feeContribution / marketCap, each
-    ///         live token floored at MIN_WEIGHT_BPS of the running total.
-    function _select(uint256 word) internal view returns (uint256) {
-        uint256 n = liveLaunches.length;
-        if (n == 0) return type(uint256).max;
+    /// @notice Freeze the weighted distribution at commit: weight = feeContribution /
+    ///         marketCap, each live token floored at MIN_WEIGHT_BPS of the total.
+    function _freezeDistribution() internal {
+        delete _drawLaunches;
+        delete _drawWeights;
+        _drawTotal = 0;
 
+        uint256 n = liveLaunches.length;
         uint256[] memory w = new uint256[](n);
         uint256 total;
         for (uint256 i; i < n; ++i) {
@@ -129,23 +175,30 @@ contract OpeningBell is ReentrancyGuard, Ownable {
             w[i] = weight;
             total += weight;
         }
-        if (total == 0) return type(uint256).max;
+        if (total == 0) return;
 
-        // Apply the per-token minimum weight floor.
         uint256 floorUnit = (total * MIN_WEIGHT_BPS) / 10_000;
         uint256 adjTotal;
         for (uint256 i; i < n; ++i) {
             if (launcher.isLive(liveLaunches[i]) && w[i] < floorUnit) w[i] = floorUnit;
+            _drawLaunches.push(liveLaunches[i]);
+            _drawWeights.push(w[i]);
             adjTotal += w[i];
         }
+        _drawTotal = adjTotal;
+    }
 
-        uint256 r = word % adjTotal;
+    /// @notice Select the winner from the distribution frozen at commit.
+    function _selectFrozen(uint256 word) internal view returns (uint256) {
+        uint256 total = _drawTotal;
+        if (total == 0) return type(uint256).max;
+        uint256 r = word % total;
         uint256 cum;
-        for (uint256 i; i < n; ++i) {
-            cum += w[i];
-            if (r < cum && w[i] > 0) return liveLaunches[i];
+        for (uint256 i; i < _drawLaunches.length; ++i) {
+            cum += _drawWeights[i];
+            if (r < cum && _drawWeights[i] > 0) return _drawLaunches[i];
         }
-        return liveLaunches[n - 1];
+        return _drawLaunches[_drawLaunches.length - 1];
     }
 
     function _clearContributions() internal {

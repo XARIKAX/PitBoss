@@ -133,7 +133,8 @@ contract DegenRollTest is TestBase {
     function test_BankrollStakeUnstake() public {
         assertEq(machine.sharePrice(), 1e18, "parity at seed");
         uint256 sharesHouse = machine.shares(house);
-        assertEq(sharesHouse, 5_000 ether, "1:1 shares on first stake");
+        // First staker gets amount - DEAD_SHARES (the dead-share inflation guard).
+        assertEq(sharesHouse, 5_000 ether - machine.DEAD_SHARES(), "1:1 shares minus dead-shares");
 
         vm.prank(house);
         uint256 out = machine.unstake(1_000 ether);

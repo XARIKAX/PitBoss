@@ -28,9 +28,15 @@ contract SeasonEngine is Ownable {
     uint64 public seasonStart;
     uint256 public seasonIndex;
 
+    /// @notice Keepers permitted to drive compression batches after a season roll.
+    mapping(address => bool) public isKeeper;
+    /// @notice Last season index a Boss was compressed for (prevents repeat halving).
+    mapping(uint256 => uint256) public lastCompressedSeason;
+
     event SeasonRolled(uint256 indexed seasonIndex, uint64 startedAt);
     event Compressed(uint256 indexed seasonIndex, uint256 count);
     event KeepBpsSet(uint256 keepBps);
+    event KeeperSet(address indexed keeper, bool allowed);
 
     constructor(address floor_) Ownable(msg.sender) {
         if (floor_ == address(0)) revert Errors.ZeroAddress();
@@ -42,6 +48,11 @@ contract SeasonEngine is Ownable {
         if (keepBps_ > 10_000) revert Errors.InvalidConfig();
         keepBps = keepBps_;
         emit KeepBpsSet(keepBps_);
+    }
+
+    function setKeeper(address keeper, bool allowed) external onlyOwner {
+        isKeeper[keeper] = allowed;
+        emit KeeperSet(keeper, allowed);
     }
 
     /// @notice Whether the current season has elapsed.
@@ -58,13 +69,23 @@ contract SeasonEngine is Ownable {
     }
 
     /// @notice Soft-reset a batch of Bosses' floor positions (compress toward mean).
-    ///         Keeper-driven; only meaningful right after a season roll. Gas bounded
-    ///         by the caller's batch size.
+    ///         Owner/keeper only, and each Boss compresses at most once per season —
+    ///         so it can never be used to repeatedly halve a rival's weight (audit
+    ///         C3). Requires at least one season to have rolled.
     function compressBatch(uint256[] calldata tokenIds) external {
+        if (msg.sender != owner() && !isKeeper[msg.sender]) revert Errors.NotAuthorized();
+        uint256 season = seasonIndex;
+        if (season == 0) revert Errors.WindowNotElapsed();
         uint256 kb = keepBps;
+        uint256 done;
         for (uint256 i; i < tokenIds.length; ++i) {
-            floor.seasonCompress(tokenIds[i], kb);
+            uint256 id = tokenIds[i];
+            // Skip any Boss already compressed for this season (idempotent).
+            if (lastCompressedSeason[id] >= season) continue;
+            lastCompressedSeason[id] = season;
+            floor.seasonCompress(id, kb);
+            ++done;
         }
-        emit Compressed(seasonIndex, tokenIds.length);
+        emit Compressed(season, done);
     }
 }

@@ -13,14 +13,22 @@ library Chains {
     uint256 internal constant ROBINHOOD_CHAIN_ID = 4663; // primary target, ETH gas
     uint256 internal constant BASE_CHAIN_ID = 8453; // fallback
 
+    // -------- Dev chains --------
+    uint256 internal constant ANVIL_CHAIN_ID = 31337;
+
     /// @notice Entropy backend selection per chain.
+    /// @dev    Blockhash/miner entropy is producer-manipulable and has a 256-block
+    ///         aging window (audit H1/H2), so it is confined to local dev (anvil).
+    ///         All real-value chains use push-model Chainlink VRF v2.5, which closes
+    ///         the "decline-a-loss" refund exploit (C1) because fulfillment is
+    ///         coordinator-driven and cannot be withheld by a player.
     enum EntropyKind {
-        Miner, // Robinhood Chain: miner/print-based DERP-style conductor
-        ChainlinkVRF // Base: VRF v2.5
+        Miner, // local dev only (anvil): future-block-hash conductor
+        ChainlinkVRF // all real-value chains: VRF v2.5 (requires a coordinator)
     }
 
     function entropyKind(uint256 chainId) internal pure returns (EntropyKind) {
-        if (chainId == ROBINHOOD_CHAIN_ID) return EntropyKind.Miner;
+        if (chainId == ANVIL_CHAIN_ID) return EntropyKind.Miner;
         return EntropyKind.ChainlinkVRF;
     }
 

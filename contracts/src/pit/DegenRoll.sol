@@ -84,6 +84,11 @@ contract DegenRoll is ReentrancyGuard {
     uint256 public constant LOSS_STREAK_LEN = 5; // consecutive floor rolls
     uint256 public constant REBATE_BPS = 1000; // 10% of avg ticket
     uint256 public constant BANKROLL_STAKE_POINTS = 10;
+    /// @notice Permanently-locked shares minted to the dead address on the first
+    ///         stake. Absorbs any share-price inflation so the classic first-
+    ///         depositor attack is unprofitable (audit H3).
+    uint256 public constant DEAD_SHARES = 1e3;
+    address internal constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     // -------- state --------
     uint256 public nextRoundId = 1;
@@ -256,8 +261,18 @@ contract DegenRoll is ReentrancyGuard {
         if (amount == 0) revert Errors.ZeroAmount();
 
         stock.safeTransferFrom(msg.sender, address(this), amount);
-        sharesOut = totalShares == 0 ? amount : (amount * totalShares) / totalBankrollStock;
-        totalShares += sharesOut;
+        if (totalShares == 0) {
+            // First deposit: lock DEAD_SHARES forever so share price can't be
+            // cheaply inflated to steal a later staker's deposit.
+            if (amount <= DEAD_SHARES) revert Errors.ZeroAmount();
+            sharesOut = amount - DEAD_SHARES;
+            shares[DEAD] += DEAD_SHARES;
+            totalShares = amount; // DEAD_SHARES + sharesOut
+        } else {
+            sharesOut = (amount * totalShares) / totalBankrollStock;
+            if (sharesOut == 0) revert Errors.ZeroAmount(); // never mint zero shares
+            totalShares += sharesOut;
+        }
         shares[msg.sender] += sharesOut;
         totalBankrollStock += amount;
 
