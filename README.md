@@ -8,7 +8,7 @@ Book**, and when it fills, anyone cranks it and each activated Boss is paid — 
 rata by dynamic floor position — in the tokenized stocks they elected, delivered
 straight to the Boss's on-chain wallet (ERC-6551 TBA).
 
-Operator: **MarketMaker Labs**. Token: **$PIT**.
+Operator: **PitBoss Labs**. Token: **$PITBOSS**.
 
 > Rewards are promotional, not dividends — they confer no equity, ownership, or
 > shareholder rights. Roll features are unavailable in restricted regions,

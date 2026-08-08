@@ -5,7 +5,7 @@ Front end for **PitBosses** (`$PIT`). _Run the floor. Get paid in stock._
 Next.js 14 (App Router) · TypeScript · wagmi v2 + viem · Tailwind CSS. Built to
 static-export (`output: 'export'`), so it serves from any static host.
 
-Operator brand: **MarketMaker Labs**. This is a front end only — the underlying
+Operator brand: **PitBoss Labs**. This is a front end only — the underlying
 contracts are permissionless.
 
 ## Run it

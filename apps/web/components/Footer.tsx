@@ -20,7 +20,7 @@ export function Footer() {
       <div className="shell py-14">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr]">
           <div>
-            <p className="eyebrow">MarketMaker Labs</p>
+            <p className="eyebrow">PitBoss Labs</p>
             <p className="headline mt-3 max-w-md text-3xl">
               Run the floor. <span className="em">Get paid in stock.</span>
             </p>
@@ -35,7 +35,7 @@ export function Footer() {
         </div>
 
         <p className="mt-12 max-w-4xl text-xs leading-relaxed text-mute">
-          © 2026 MarketMaker Labs. Rewards are promotional, not dividends — they confer no equity,
+          © 2026 PitBoss Labs. Rewards are promotional, not dividends — they confer no equity,
           ownership, or shareholder rights and are not a share of revenue or profits. Roll features
           are unavailable in restricted regions, including the United States. Nothing on this site is
           financial, investment, legal, or tax advice. This site is a front end only; the underlying

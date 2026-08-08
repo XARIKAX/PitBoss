@@ -88,7 +88,7 @@ export function HeroBanner() {
         className="absolute bottom-6 left-6 z-10 font-mono text-[12px] uppercase text-mute sm:left-10"
         style={{ letterSpacing: '0.18em' }}
       >
-        MarketMaker Labs presents
+        PitBoss Labs presents
       </p>
     </section>
   );
