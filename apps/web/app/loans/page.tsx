@@ -306,7 +306,7 @@ export default function LoansPage() {
               const cd = countdown(dueMs, now);
               const overdue = !l.closed && dueMs <= now;
               return (
-                <div key={l.loanId.toString()} className="card border-dashed">
+                <div key={l.loanId.toString()} className="ticket panel shine relative overflow-hidden border-dashed p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <BossFace n={Number(l.bossId) || 1} size={52} />
@@ -377,12 +377,13 @@ function DemoTickets() {
   return (
     <div className="grid gap-3">
       {DEMO_TICKETS.map((t) => (
-        <div key={t.id} className="card relative overflow-hidden border-dashed">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <BossFace n={t.boss} size={52} />
+        <div key={t.id} className="ticket panel shine relative overflow-hidden border-dashed p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <BossFace n={t.boss} size={56} />
               <div>
-                <p className="data text-sm">
+                <p className="label text-[9px]">PITBOSSES PAWN DESK · COLLATERAL RECEIPT</p>
+                <p className="data mt-1.5 text-sm">
                   Ticket #{t.id} · Boss #{t.boss} · {t.principal} PIT
                 </p>
                 <p className={`mt-1 text-xs ${t.stamp === 'OVERDUE' ? 'text-ember' : 'text-mute'}`}>
@@ -393,13 +394,17 @@ function DemoTickets() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`data rotate-[-6deg] rounded border-2 px-2.5 py-1 text-[11px] font-bold tracking-[0.18em] ${t.stampCls}`}
-              >
-                {t.stamp}
-              </span>
-              <SimBadge />
+            <div className="flex flex-col items-end gap-2.5">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`data rotate-[-6deg] rounded border-2 px-2.5 py-1 text-[11px] font-bold tracking-[0.18em] ${t.stampCls}`}
+                >
+                  {t.stamp}
+                </span>
+                <SimBadge />
+              </div>
+              <div className="barcode w-36" />
+              <p className="data text-[10px] tracking-[0.32em] text-dim">N° 000{t.id}</p>
             </div>
           </div>
         </div>

@@ -7,6 +7,7 @@ import { formatEther, parseAbiItem } from 'viem';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { DemoBanner, BossFace, SimBadge } from '@/components/demo';
+import { LedBar } from '@/components/viz';
 import { readMany, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed } from '@/lib/deployments';
@@ -122,22 +123,20 @@ export default function BookPage() {
           {/* TOTAL + CRANK */}
           <Section label="The Book" title="One" emphasis="ledger.">
             <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-              <div className="card">
+              <div className="surface-hero p-5">
                 <p className="eyebrow">Bar (undistributed edge)</p>
-                <p className="data mt-2 text-5xl text-lime">
+                <p className={`stat-display mt-3 ${crankReady ? 'is-gold' : ''}`}>
                   {bar.data != null ? `Ξ${formatEther(bar.data)}` : '…'}
                 </p>
-                <div className="mt-4">
+                <div className="mt-5">
                   <div className="flex items-center justify-between text-xs text-mute">
                     <span className="data">bar fill</span>
-                    <span className="data text-lime">
+                    <span className={`data ${crankReady ? 'text-gold' : 'text-lime'}`}>
                       {fillPct.toFixed(1)}% of Ξ
                       {threshold.data != null ? formatEther(threshold.data) : '…'}
                     </span>
                   </div>
-                  <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/60">
-                    <div className="h-full rounded-full bg-lime" style={{ width: `${fillPct}%` }} />
-                  </div>
+                  <LedBar pct={fillPct} className="mt-2.5" />
                 </div>
                 <p className="mt-3 text-xs text-mute">
                   Owed to bosses: {owed.data != null ? `Ξ${formatEther(owed.data)}` : '…'}
@@ -312,29 +311,20 @@ function DemoBook() {
           automatically at deployment.
         </DemoBanner>
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <div className="card">
+          <div className="surface-hero p-5">
             <div className="flex items-center justify-between">
               <p className="eyebrow">Bar (undistributed edge)</p>
               <SimBadge />
             </div>
-            <p className="num data mt-2 text-5xl text-lime">Ξ{bar.toFixed(3)}</p>
-            <div className="mt-4">
+            <p className={`stat-display mt-3 ${ready ? 'is-gold' : ''}`}>Ξ{bar.toFixed(3)}</p>
+            <div className="mt-5">
               <div className="flex items-center justify-between text-xs text-mute">
                 <span className="data">bar fill</span>
                 <span className={`data ${ready ? 'text-gold' : 'text-lime'}`}>
                   {fillPct.toFixed(1)}% of Ξ{DEMO_THRESHOLD}
                 </span>
               </div>
-              <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/60">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    ready
-                      ? 'bg-gradient-to-r from-lime to-gold shadow-[0_0_16px_rgba(245,200,66,0.5)]'
-                      : 'bg-lime'
-                  }`}
-                  style={{ width: `${fillPct}%` }}
-                />
-              </div>
+              <LedBar pct={fillPct} className="mt-2.5" />
             </div>
             <div className="mt-4 flex items-center gap-2">
               {[3, 7, 1, 5].map((n) => (

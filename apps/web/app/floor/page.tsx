@@ -86,7 +86,7 @@ function BossGallery() {
       {Array.from({ length: 10 }, (_, i) => i + 1).map((id) => (
         <figure
           key={id}
-          className="group overflow-hidden rounded-xl border border-line bg-black/40 transition hover:border-lime/50"
+          className="panel panel-hover shine group relative overflow-hidden"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

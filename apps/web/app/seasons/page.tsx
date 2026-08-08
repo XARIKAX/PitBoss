@@ -127,22 +127,37 @@ export default function SeasonsPage() {
           {[STANDINGS[1], STANDINGS[0], STANDINGS[2]].map((r) => {
             const first = r.rank === 1;
             const frame = first
-              ? 'border-gold/60 bg-gold/[0.05]'
+              ? 'border-gold/60'
               : r.rank === 2
                 ? 'border-paper/25'
                 : 'border-ember/40';
             const medal = first ? 'text-gold' : r.rank === 2 ? 'text-paper' : 'text-ember';
+            const pedestal = first
+              ? 'from-gold/80 to-gold/10'
+              : r.rank === 2
+                ? 'from-paper/50 to-paper/5'
+                : 'from-ember/60 to-ember/5';
             return (
               <div
                 key={r.rank}
-                className={`card flex items-center gap-4 border ${frame} ${first ? 'sm:-translate-y-1.5' : ''}`}
+                className={`${first ? 'surface-hero sm:-translate-y-2' : 'panel'} shine relative flex items-center gap-4 overflow-hidden border p-5 ${frame}`}
               >
-                <BossFace n={r.boss} size={first ? 64 : 52} />
+                <BossFace
+                  n={r.boss}
+                  size={first ? 68 : 52}
+                  className={first ? 'shadow-[0_0_28px_rgba(245,200,66,0.35)]' : ''}
+                />
                 <div>
-                  <p className={`num data text-2xl font-bold ${medal}`}>#{r.rank}</p>
+                  <p className={`num data text-2xl font-bold ${medal}`}>
+                    #{r.rank}
+                    {first ? <span className="ml-1.5 text-sm align-top">♛</span> : null}
+                  </p>
                   <p className="data text-sm">{r.who}</p>
                   <p className="data text-xs text-mute">{r.score.toLocaleString()} pts</p>
                 </div>
+                <span
+                  className={`absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r ${pedestal}`}
+                />
               </div>
             );
           })}

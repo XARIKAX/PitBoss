@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { formatEther, parseAbiItem } from 'viem';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
-import { DemoBanner, Meter, SimBadge } from '@/components/demo';
+import { DemoBanner, SimBadge } from '@/components/demo';
+import { ProgressRing } from '@/components/viz';
 import { readMany, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed } from '@/lib/deployments';
@@ -255,6 +256,7 @@ const DEMO_LOCKS = [
     meterLabel: 'time served',
     fees: 'Ξ0.214 claimable',
     accent: 'text-lime',
+    ring: '#C6FF00',
   },
   {
     id: 7,
@@ -266,6 +268,7 @@ const DEMO_LOCKS = [
     meterLabel: 'vested',
     fees: 'Ξ0.088 claimable',
     accent: 'text-acid',
+    ring: '#9EF01A',
   },
   {
     id: 1,
@@ -277,10 +280,11 @@ const DEMO_LOCKS = [
     meterLabel: 'sealed',
     fees: 'Ξ1.802 claimed to date',
     accent: 'text-gold',
+    ring: '#F5C842',
   },
 ] as const;
 
-/** The vault room, simulated: three sealed doors showing each lock style. */
+/** The vault room, simulated: three sealed doors, each with its own dial. */
 function DemoVaults() {
   return (
     <>
@@ -290,7 +294,7 @@ function DemoVaults() {
       </DemoBanner>
       <div className="grid gap-3 lg:grid-cols-3">
         {DEMO_LOCKS.map((v) => (
-          <div key={v.id} className="card relative overflow-hidden">
+          <div key={v.id} className="card shine relative overflow-hidden">
             <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent_0_14px,rgba(198,255,0,0.015)_14px_16px)]" />
             <div className="flex items-center justify-between">
               <span className={`data flex h-10 w-10 items-center justify-center rounded-lg border border-line text-xl ${v.accent}`}>
@@ -298,19 +302,22 @@ function DemoVaults() {
               </span>
               <SimBadge />
             </div>
-            <p className="headline mt-3 text-[15px]">Vault #{v.id}</p>
-            <p className="data mt-1 text-xs text-mute">
-              {v.pair} · {v.style}
-            </p>
-            <p className={`data mt-2 text-xs ${v.accent}`}>{v.line}</p>
-            <div className="mt-3">
-              <div className="eyebrow flex justify-between">
-                <span>{v.meterLabel}</span>
-                <span>{v.pct}%</span>
+            <div className="mt-4 flex items-center gap-4">
+              <ProgressRing pct={v.pct} color={v.ring} size={96}>
+                <span className={`data text-lg font-bold ${v.accent}`}>{v.pct}%</span>
+                <span className="label mt-0.5 text-[8.5px]">{v.meterLabel}</span>
+              </ProgressRing>
+              <div>
+                <p className="headline text-[15px]">Vault #{v.id}</p>
+                <p className="data mt-1 text-xs text-mute">
+                  {v.pair}
+                  <br />
+                  {v.style}
+                </p>
+                <p className={`data mt-1.5 text-xs ${v.accent}`}>{v.line}</p>
               </div>
-              <Meter pct={v.pct} className="mt-1.5" />
             </div>
-            <p className="data mt-3 text-xs text-mute">
+            <p className="data mt-4 border-t border-line/60 pt-3 text-xs text-mute">
               LP fees keep flowing while it sits: <span className="text-paper">{v.fees}</span>
             </p>
           </div>

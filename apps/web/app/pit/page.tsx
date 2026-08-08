@@ -244,7 +244,7 @@ function DemoPit({
             <button
               key={m.symbol}
               onClick={() => selectMachine(i)}
-              className={`card text-left transition-colors ${
+              className={`card shine relative overflow-hidden text-left transition-colors ${
                 i === sel ? 'border-limeSoft' : 'hover:border-lime/40'
               }`}
             >
@@ -308,7 +308,7 @@ function DemoPit({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <div className="card">
+          <div className="surface-hero p-5">
             <div className="flex items-center justify-between">
               <p className="headline text-[14px]">{dm.symbol} · machine</p>
               <span className="data rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
@@ -392,7 +392,7 @@ function CabinetTile({
   return (
     <button
       onClick={onSelect}
-      className={`card text-left transition-colors ${active ? 'border-limeSoft' : 'hover:border-lime/40'}`}
+      className={`card shine relative overflow-hidden text-left transition-colors ${active ? 'border-limeSoft' : 'hover:border-lime/40'}`}
     >
       <div className="flex items-center justify-between">
         <p className="headline text-lg">{m.symbol}</p>
@@ -628,7 +628,7 @@ function TicketSection({
     <Section label={`${machine.symbol} Pit`} title="Buy a" emphasis="ticket.">
       <WinTicker machine={machine} />
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div className="card">
+        <div className="surface-hero p-5">
           <div className="flex items-center justify-between">
             <p className="headline text-[14px]">{machine.symbol} · machine</p>
             <EntropyBadge machine={m} />
