@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatEther, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
+import { DemoBanner, BossFace, SimBadge } from '@/components/demo';
 import { readMany, safeRead, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { useMyBossIds } from '@/lib/bosses';
@@ -180,10 +181,18 @@ export default function LoansPage() {
 
       <Section label="Vault" title="The" emphasis="numbers.">
         {!deployed ? (
-          <EmptyState
-            title="Not deployed"
-            hint="The LoanVault has no address on this chain yet. Quotes, borrowing and repayment go live here once deployments land."
-          />
+          <>
+            <DemoBanner>
+              The pawn desk isn&apos;t deployed yet — the terms and tickets below are simulated.
+              Live quotes and your real loans replace them at deployment.
+            </DemoBanner>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Loan principal" value="10,000" sub="PIT per loan, flat" />
+              <Stat label="APR" value="15.00%" sub="pro-rated by term · 30% late" />
+              <Stat label="Fee for 30 days" value="Ξ0.0037" sub="paid upfront" />
+              <Stat label="Liquidations" value="None" sub="default returns the Boss to the vault" />
+            </div>
+          </>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
@@ -275,14 +284,14 @@ export default function LoansPage() {
         </Section>
       ) : null}
 
-      <Section label="History" title="Your" emphasis="loans.">
-        {!isConnected ? (
+      <Section label="History" title="Your" emphasis="tickets.">
+        {!deployed ? (
+          <DemoTickets />
+        ) : !isConnected ? (
           <EmptyState
             title="Connect to see your loans"
             hint="Open and past loans, their fees and repayment status show here."
           />
-        ) : !deployed ? (
-          <EmptyState title="Not deployed" hint="The LoanVault has no address on this chain yet." />
         ) : loans.isLoading ? (
           <p className="data text-sm text-mute">Scanning loans…</p>
         ) : !loans.data || loans.data.length === 0 ? (
@@ -297,14 +306,16 @@ export default function LoansPage() {
               const cd = countdown(dueMs, now);
               const overdue = !l.closed && dueMs <= now;
               return (
-                <div key={l.loanId.toString()} className="card">
+                <div key={l.loanId.toString()} className="card border-dashed">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="data text-sm">
-                        Loan #{l.loanId.toString()} · Boss #{l.bossId.toString()} ·{' '}
-                        {formatEther(l.principal)} PIT
-                      </p>
-                      <p className="mt-1 text-xs text-mute">
+                    <div className="flex items-center gap-3">
+                      <BossFace n={Number(l.bossId) || 1} size={52} />
+                      <div>
+                        <p className="data text-sm">
+                          Ticket #{l.loanId.toString()} · Boss #{l.bossId.toString()} ·{' '}
+                          {formatEther(l.principal)} PIT
+                        </p>
+                        <p className="mt-1 text-xs text-mute">
                         {l.closed ? (
                           'closed'
                         ) : overdue ? (
@@ -314,7 +325,8 @@ export default function LoansPage() {
                         ) : (
                           `due in ${cd.days}d ${cd.hours}h ${cd.minutes}m ${cd.seconds}s`
                         )}
-                      </p>
+                        </p>
+                      </div>
                     </div>
                     {!l.closed ? (
                       <button
@@ -336,5 +348,62 @@ export default function LoansPage() {
         )}
       </Section>
     </ChainGuard>
+  );
+}
+
+/* ------------------------------------------------------------ demo tickets */
+
+const DEMO_TICKETS = [
+  {
+    id: 14,
+    boss: 217,
+    principal: '10,000',
+    line: 'due in 12d 4h · on time',
+    stamp: 'ON TIME',
+    stampCls: 'border-acid/50 text-acid',
+  },
+  {
+    id: 3,
+    boss: 888,
+    principal: '10,000',
+    line: 'overdue · late fee Ξ0.0041 accruing at 30% APR',
+    stamp: 'OVERDUE',
+    stampCls: 'border-ember/60 text-ember',
+  },
+] as const;
+
+/** The pawn desk, simulated: two tickets showing both states of a loan. */
+function DemoTickets() {
+  return (
+    <div className="grid gap-3">
+      {DEMO_TICKETS.map((t) => (
+        <div key={t.id} className="card relative overflow-hidden border-dashed">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <BossFace n={t.boss} size={52} />
+              <div>
+                <p className="data text-sm">
+                  Ticket #{t.id} · Boss #{t.boss} · {t.principal} PIT
+                </p>
+                <p className={`mt-1 text-xs ${t.stamp === 'OVERDUE' ? 'text-ember' : 'text-mute'}`}>
+                  {t.line}
+                </p>
+                <p className="mt-1 text-xs text-mute">
+                  Boss held as collateral · repay exactly what you took to reclaim it
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`data rotate-[-6deg] rounded border-2 px-2.5 py-1 text-[11px] font-bold tracking-[0.18em] ${t.stampCls}`}
+              >
+                {t.stamp}
+              </span>
+              <SimBadge />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

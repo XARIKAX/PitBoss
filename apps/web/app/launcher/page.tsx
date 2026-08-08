@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { formatEther, parseEther, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
+import { DemoBanner, Meter, SimBadge } from '@/components/demo';
 import { ABIS, readMany, safeRead, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed } from '@/lib/deployments';
@@ -126,23 +127,30 @@ export default function LauncherPage() {
         {launcherLive ? (
           <CreateWizard />
         ) : (
-          <EmptyState
-            title="Not deployed"
-            hint="The LauncherFactory has no address on this chain yet. The create-launch wizard goes live here once deployments land."
-          />
+          <div className="grid gap-3 sm:grid-cols-4">
+            {WIZARD_STEPS.map((s, i) => (
+              <div key={s} className="card">
+                <p className="data text-xs text-lime">step {i + 1}</p>
+                <p className="headline mt-2 text-[15px]">{s}</p>
+                <p className="mt-2 text-xs text-mute">
+                  {
+                    [
+                      'Name, ticker and supply. The token deploys from the factory.',
+                      'Fixed price or bonding curve. Every trade charges the Buyback Bar.',
+                      'Hit the raise threshold and 20% of supply seeds the pool.',
+                      'Review, sign, live. The bell can call your number any round.',
+                    ][i]
+                  }
+                </p>
+              </div>
+            ))}
+          </div>
         )}
       </Section>
 
       {/* LIVE LAUNCHES */}
       <Section label="Live launches" title="Fill the" emphasis="bar.">
-        {launcherLive ? (
-          <LaunchList />
-        ) : (
-          <EmptyState
-            title="Not deployed"
-            hint="Live curves show here — spot price, sold supply, raised ETH and graduation progress."
-          />
-        )}
+        {launcherLive ? <LaunchList /> : <DemoLaunches />}
       </Section>
 
       {/* OPENING BELL */}
@@ -431,12 +439,7 @@ function OpeningBellPanel() {
   const committed = useRead<boolean>({ contract: c.openingBell, functionName: 'drawCommitted', refetchInterval: 15_000 });
 
   if (!bellLive) {
-    return (
-      <EmptyState
-        title="Not deployed"
-        hint="The OpeningBell has no address on this chain yet. The bar, draw commitment and ring controls go live here."
-      />
-    );
+    return <DemoBell />;
   }
 
   const fill =
@@ -512,6 +515,187 @@ function OpeningBellPanel() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------- demo floor */
+
+const DEMO_LAUNCHES = [
+  {
+    sym: 'ACME',
+    name: 'Acme Industrial',
+    curve: 'bonding curve',
+    spot: '0.000041',
+    raised: 'Ξ8.4',
+    grad: 68,
+    path: 'M2,40 C40,38 78,28 118,6',
+    graduated: false,
+  },
+  {
+    sym: 'NEON',
+    name: 'Neon District',
+    curve: 'bonding curve',
+    spot: '0.000012',
+    raised: 'Ξ2.1',
+    grad: 23,
+    path: 'M2,40 C50,39 90,34 118,24',
+    graduated: false,
+  },
+  {
+    sym: 'VLT',
+    name: 'Vault Works',
+    curve: 'fixed price',
+    spot: '0.000100',
+    raised: 'Ξ14.0',
+    grad: 100,
+    path: 'M2,22 L118,22',
+    graduated: true,
+  },
+] as const;
+
+/** Live curves, simulated: spot chart, raise meter, graduation state. */
+function DemoLaunches() {
+  return (
+    <>
+      <DemoBanner>
+        The launcher isn&apos;t deployed yet — these three curves are simulated. Real launches with
+        live buys replace them at deployment.
+      </DemoBanner>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {DEMO_LAUNCHES.map((l) => (
+          <div key={l.sym} className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="headline text-lg">${l.sym}</p>
+                <p className="data text-xs text-mute">
+                  {l.name} · {l.curve}
+                </p>
+              </div>
+              {l.graduated ? (
+                <span className="chip border-gold/60 text-gold">graduated 🔔</span>
+              ) : (
+                <SimBadge label="live · sim" />
+              )}
+            </div>
+            <svg viewBox="0 0 120 44" className="mt-3 h-16 w-full" aria-hidden>
+              <path d={l.path} fill="none" stroke="#C6FF00" strokeWidth="1.5" opacity="0.9" />
+              <path
+                d={`${l.path} L118,44 L2,44 Z`}
+                fill="#C6FF00"
+                opacity="0.07"
+                stroke="none"
+              />
+            </svg>
+            <div className="data flex justify-between text-xs text-mute">
+              <span>
+                spot <span className="text-lime">Ξ{l.spot}</span>
+              </span>
+              <span>
+                raised <span className="text-lime">{l.raised}</span>
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="eyebrow flex justify-between">
+                <span>graduation</span>
+                <span>{l.grad}%</span>
+              </div>
+              <Meter pct={l.grad} className="mt-1.5" />
+            </div>
+            <button disabled className="pill-ghost mt-4 w-full opacity-50">
+              Buy on the curve · at deployment
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** The Opening Bell, simulated: fill the bar, commit, ring, someone wins. */
+function DemoBell() {
+  const [bar, setBar] = useState(3.42);
+  const [committed, setCommitted] = useState(false);
+  const [lastRing, setLastRing] = useState<string | null>('$NEON bought back Ξ4.00 · 2h ago');
+  const threshold = 4;
+
+  useEffect(() => {
+    const t = setInterval(() => setBar((b) => Math.min(threshold * 1.1, b + 0.008)), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fill = Math.min(100, (bar / threshold) * 100);
+  const full = bar >= threshold;
+
+  function ring() {
+    if (!committed) return;
+    const winner = DEMO_LAUNCHES[Math.floor(Math.random() * 2)];
+    setLastRing(`$${winner.sym} bought back Ξ${bar.toFixed(2)} · just now`);
+    setBar(0.2);
+    setCommitted(false);
+  }
+
+  return (
+    <>
+      <DemoBanner>
+        The bell isn&apos;t deployed yet — this bar fills on a simulated feed. Commit the draw,
+        then ring it. The real bell replaces this at deployment.
+      </DemoBanner>
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <p className="headline text-[14px]">Buyback Bar</p>
+            <span className="data text-xs text-mute">2 live launches</span>
+          </div>
+          <p className={`num data mt-3 text-4xl ${full ? 'text-gold' : 'text-lime'}`}>
+            Ξ{bar.toFixed(3)}
+          </p>
+          <div className="mt-4 flex items-center justify-between text-xs text-mute">
+            <span className="data">bar fill</span>
+            <span className={`data ${full ? 'text-gold' : 'text-lime'}`}>
+              {fill.toFixed(1)}% of Ξ{threshold}
+            </span>
+          </div>
+          <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/60">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                full
+                  ? 'bg-gradient-to-r from-lime to-gold shadow-[0_0_16px_rgba(245,200,66,0.5)]'
+                  : 'bg-lime'
+              }`}
+              style={{ width: `${fill}%` }}
+            />
+          </div>
+          {lastRing ? (
+            <p className="data mt-3 text-xs text-gold">🔔 {lastRing}</p>
+          ) : null}
+        </div>
+
+        <div className="card flex flex-col justify-between">
+          <div>
+            <p className="headline text-[14px]">Ring the bell</p>
+            <p className="mt-2 text-sm text-mute">
+              When the bar is full: commit a draw, wait for entropy, then ring. A random live
+              launch gets bought back; the ringer takes a 0.5% tip.
+            </p>
+            <p className="data mt-2 text-xs text-mute">
+              draw {committed ? 'committed · entropy ready' : 'not committed'}
+            </p>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => setCommitted(true)}
+              disabled={!full || committed}
+              className="pill-ghost flex-1 disabled:opacity-50"
+            >
+              Commit draw
+            </button>
+            <button onClick={ring} disabled={!committed} className="pill-lime flex-1 disabled:opacity-50">
+              Ring 🔔
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

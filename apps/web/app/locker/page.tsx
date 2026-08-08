@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatEther, parseAbiItem } from 'viem';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
+import { DemoBanner, Meter, SimBadge } from '@/components/demo';
 import { readMany, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed } from '@/lib/deployments';
@@ -21,9 +22,9 @@ import { shortAddr } from '@/lib/format';
  *   position manager itself.
  */
 const LOCK_KINDS = [
-  { id: 'hard', label: 'Hard lock', desc: 'Locked solid until the unlock date. No early exit.' },
-  { id: 'vest', label: 'Linear vest', desc: 'Unlocks continuously over the vesting window.' },
-  { id: 'perm', label: 'Permanent', desc: 'Burn the key. Liquidity locked forever.' },
+  { id: 'hard', label: 'Hard lock', glyph: '◼', desc: 'Locked solid until the unlock date. No early exit.' },
+  { id: 'vest', label: 'Linear vest', glyph: '◧', desc: 'Unlocks continuously over the vesting window.' },
+  { id: 'perm', label: 'Permanent', glyph: '∞', desc: 'Burn the key. Liquidity locked forever.' },
 ] as const;
 
 const STYLE_LABEL = ['hard lock', 'linear vest', 'permanent'] as const;
@@ -143,7 +144,15 @@ export default function LockerPage() {
               onClick={() => setKind(k.id)}
               className={`card text-left transition-colors ${kind === k.id ? 'border-lime' : 'hover:border-lime/40'}`}
             >
-              <p className="headline text-[14px]">{k.label}</p>
+              <span
+                className={`data flex h-9 w-9 items-center justify-center rounded-lg border text-lg ${
+                  kind === k.id ? 'border-lime/60 text-lime' : 'border-line text-mute'
+                }`}
+                aria-hidden
+              >
+                {k.glyph}
+              </span>
+              <p className="headline mt-3 text-[14px]">{k.label}</p>
               <p className="mt-2 text-sm text-mute">{k.desc}</p>
             </button>
           ))}
@@ -151,10 +160,26 @@ export default function LockerPage() {
 
         <div className="card mt-4">
           {!lockerLive ? (
-            <EmptyState
-              title="Not deployed"
-              hint="The LiquidityLocker has no address on this chain yet."
-            />
+            <>
+              <p className="max-w-prose text-sm text-mute">
+                Locking a{' '}
+                <span className="text-paper">
+                  {LOCK_KINDS.find((k) => k.id === kind)?.label.toLowerCase()}
+                </span>{' '}
+                takes two steps from your LP wallet: approve the position NFT to the locker, then
+                call lock with the upfront fee attached. Once sealed, the lock itself is an NFT —
+                transferable, verifiable, and (unless you burned the key) releasable on schedule.
+              </p>
+              <div className="data mt-4 flex flex-wrap gap-4 text-xs text-mute">
+                <span>
+                  upfront fee <span className="text-lime">Ξ0.01</span>
+                </span>
+                <span>
+                  protocol fee share <span className="text-lime">20.00%</span>
+                </span>
+                <SimBadge label="demo values" />
+              </div>
+            </>
           ) : (
             <>
               <p className="max-w-prose text-sm text-mute">
@@ -187,15 +212,12 @@ export default function LockerPage() {
       </Section>
 
       <Section label="My locks" title="What's" emphasis="sealed.">
-        {!isConnected ? (
+        {!lockerLive ? (
+          <DemoVaults />
+        ) : !isConnected ? (
           <EmptyState
             title="Connect to see your locks"
             hint="Your active locks, their kind, unlock schedule and claimable fees show here."
-          />
-        ) : !lockerLive ? (
-          <EmptyState
-            title="Not deployed"
-            hint="The LiquidityLocker has no address on this chain yet."
           />
         ) : locks.isLoading ? (
           <p className="data text-sm text-mute">Scanning locks…</p>
@@ -217,6 +239,84 @@ export default function LockerPage() {
         <ManageByIdCard />
       </Section>
     </ChainGuard>
+  );
+}
+
+/* -------------------------------------------------------------- demo vault */
+
+const DEMO_LOCKS = [
+  {
+    id: 12,
+    pair: 'PIT / ETH LP',
+    style: 'hard lock',
+    glyph: '◼',
+    line: 'unlocks Mar 14, 2027',
+    pct: 62,
+    meterLabel: 'time served',
+    fees: 'Ξ0.214 claimable',
+    accent: 'text-lime',
+  },
+  {
+    id: 7,
+    pair: 'ACME / ETH LP',
+    style: 'linear vest',
+    glyph: '◧',
+    line: '43% vested · streaming',
+    pct: 43,
+    meterLabel: 'vested',
+    fees: 'Ξ0.088 claimable',
+    accent: 'text-acid',
+  },
+  {
+    id: 1,
+    pair: 'PIT / ETH LP',
+    style: 'permanent',
+    glyph: '∞',
+    line: 'key burned · sealed forever',
+    pct: 100,
+    meterLabel: 'sealed',
+    fees: 'Ξ1.802 claimed to date',
+    accent: 'text-gold',
+  },
+] as const;
+
+/** The vault room, simulated: three sealed doors showing each lock style. */
+function DemoVaults() {
+  return (
+    <>
+      <DemoBanner>
+        The locker isn&apos;t deployed yet — these three vaults show each lock style. Your real
+        locks appear here with collect, vest and release controls at deployment.
+      </DemoBanner>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {DEMO_LOCKS.map((v) => (
+          <div key={v.id} className="card relative overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent_0_14px,rgba(198,255,0,0.015)_14px_16px)]" />
+            <div className="flex items-center justify-between">
+              <span className={`data flex h-10 w-10 items-center justify-center rounded-lg border border-line text-xl ${v.accent}`}>
+                {v.glyph}
+              </span>
+              <SimBadge />
+            </div>
+            <p className="headline mt-3 text-[15px]">Vault #{v.id}</p>
+            <p className="data mt-1 text-xs text-mute">
+              {v.pair} · {v.style}
+            </p>
+            <p className={`data mt-2 text-xs ${v.accent}`}>{v.line}</p>
+            <div className="mt-3">
+              <div className="eyebrow flex justify-between">
+                <span>{v.meterLabel}</span>
+                <span>{v.pct}%</span>
+              </div>
+              <Meter pct={v.pct} className="mt-1.5" />
+            </div>
+            <p className="data mt-3 text-xs text-mute">
+              LP fees keep flowing while it sits: <span className="text-paper">{v.fees}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
