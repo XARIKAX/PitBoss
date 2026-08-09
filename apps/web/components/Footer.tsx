@@ -4,6 +4,7 @@ import { Wordmark } from '@/components/Wordmark';
 const NAV = [
   { href: '/floor', label: 'Floor' },
   { href: '/pit', label: 'Pit' },
+  { href: '/roulette', label: 'Roulette' },
   { href: '/certificates', label: 'Certificates' },
   { href: '/launcher', label: 'Launcher' },
   { href: '/locker', label: 'Locker' },

@@ -22,6 +22,9 @@ export const IconFloor = (p: SVGProps<SVGSVGElement>) => (
 export const IconPit = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /></svg>
 );
+export const IconRoulette = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3" /><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9 18 18M18 6l-2.1 2.1M8.1 15.9 6 18" /></svg>
+);
 export const IconCert = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="4" y="3.5" width="16" height="13" rx="2" /><path d="M7 8h10M7 11h6" /><circle cx="12" cy="18.5" r="2.2" /><path d="m10.4 20 -0.6 2.5 2.2-1.2 2.2 1.2-0.6-2.5" /></svg>
 );
