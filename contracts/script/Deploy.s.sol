@@ -28,6 +28,7 @@ import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
 import {MockEntropyConductor} from "../src/mocks/MockEntropyConductor.sol";
 import {MinerEntropyConductor} from "../src/pit/entropy/MinerEntropyConductor.sol";
 import {VRFEntropyConductor} from "../src/pit/entropy/VRFEntropyConductor.sol";
+import {VRFServiceConductor} from "../src/pit/entropy/VRFServiceConductor.sol";
 import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {Chains} from "../src/config/Chains.sol";
 
@@ -88,9 +89,18 @@ contract Deploy is Script {
             a.oracle = vm.envAddress("ORACLE");
             a.router = vm.envAddress("SWAP_ROUTER");
             a.stockSample = vm.envAddress("STOCK_SAMPLE");
-            a.conductor = Chains.entropyKind(block.chainid) == Chains.EntropyKind.Miner
-                ? address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)))
-                : address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
+            Chains.EntropyKind ek = Chains.entropyKind(block.chainid);
+            if (ek == Chains.EntropyKind.VRFService) {
+                // Robinhood Chain: adapt the managed IVRFService (BlockhashRandomness
+                // ServiceV3, later Pyth). After deploy: the service owner must
+                // setSpinEngine(this conductor), and the conductor must be funded
+                // with ETH to pre-pay per-request VRF fees.
+                a.conductor = address(new VRFServiceConductor(vm.envAddress("VRF_SERVICE"), msg.sender));
+            } else if (ek == Chains.EntropyKind.Miner) {
+                a.conductor = address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)));
+            } else {
+                a.conductor = address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
+            }
         }
         a.poolDeployer = address(new MockPoolDeployer()); // replace with V3 adapter on mainnet
 

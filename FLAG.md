@@ -17,11 +17,10 @@ value in one place; the deploy script and frontend read from these.
 |---|---|---|
 | Primary chain | Robinhood Chain — chainId **4663**, ETH gas | `Chains.sol` |
 | Fallback chain | Base — chainId **8453** | `Chains.sol` |
-| Entropy backend (Robinhood) | **Blockhash commit-reveal** (`MinerEntropyConductor`) — operator-trust; no VRF on-chain | `Chains.entropyKind` |
+| Entropy backend (Robinhood) | **Managed `IVRFService`** via `VRFServiceConductor` → `BlockhashRandomnessServiceV3` (`0x1985…E327`); swaps to Pyth Entropy with no code change | `Chains.entropyKind` (VRFService) |
 | Entropy backend (Base) | Chainlink VRF v2.5 (`VRFEntropyConductor`) | `Chains.entropyKind` |
-| Entropy stall window | **30 min** (fail-closed threshold) | `EntropyConductorBase.STALL_WINDOW` |
-| Blockhash target | `committedBlock + delay/blockTime + 2` (tracks `readyAt`) | `MinerEntropyConductor` |
-| `block.number` rate (Robinhood) | **12 s** — `block.number` is L1-synced on Arbitrum/Orbit, **VERIFY on-chain** | `Chains.blockTimeMs` |
+| Entropy backend (local/anvil) | Self-hosted blockhash (`MinerEntropyConductor`) | `Chains.entropyKind` (Miner) |
+| VRF fee | flat native ETH per request (`vrfService.vrfFeeNative()`), pre-paid from the conductor's ETH float | `VRFServiceConductor` |
 
 ### The Floor
 | Config | Value used | Where |
@@ -229,39 +228,39 @@ deploy-time wiring step, see below), and pause of NEW ticket sales only. No admi
 can touch locked liquidity, player-owed funds, reserved prizes, bankroll stakes, or
 certificate vaults.
 
-### Entropy on Robinhood Chain — blockhash (operator-trust), by decision
-No two-party VRF (Chainlink / Pyth Entropy) is deployed on Robinhood Chain, so the
-Degen Roll **and** Roulette use `MinerEntropyConductor`: the word is
-`keccak(id, blockhash(targetBlock))`, where the target is a **future** block chosen
-to land at/after the commitment's `readyAt` (`committedBlock + delay/blockTime + 2`).
-This keeps the target's hash inside the 256-block (~64s) observable window even for
-the 10-minute Vault lane — a naive `commit + k` target would age out and brick the
-lane on a ~0.25s chain.
+### Entropy on Robinhood Chain — managed `IVRFService` adapter
+The Degen Roll, Roulette, and Opening Bell get randomness from the chain's managed
+service through `VRFServiceConductor`, which adapts `IVRFService`
+(`BlockhashRandomnessServiceV3` today, `0x1985…E327`; `PythEntropyService` when Pyth
+lands — same interface, **zero code change** to swap). Flow: `commit` → conductor
+pays the flat `vrfFeeNative()` and calls `requestRandomWord()` → the service delivers
+a word a block later (its own keeper, re-arming if the blockhash ages out) → `fulfill`
+pulls `wordOf(requestId)` (truth) once past the consumer's `readyAt`. The service's
+`onRandomWord` callback is a guarded, non-reverting **hint** only.
 
-- **Trust model:** the sequencer produces the target block, so it is the trust root
-  (operator-trust). Strictly weaker than a two-party VRF; accepted for launch and
-  swappable behind `IEntropyConductor` (migrated in the consumers behind a timelock)
-  for VRF/Pyth later with no change to the games.
+- **Trust model:** the underlying `BlockhashRandomnessServiceV3` is `PRODUCTION_SAFE
+  = false` (blockhash/operator-trust, bootstrap-grade) — accepted for launch, and the
+  adapter makes the upgrade to Pyth Entropy a config change, not a code change.
 - **Anti-abort:** a player cannot decline a losing pull — `settle` is permissionless
   (a keeper settles every round, win or lose) and refund is only available after 48h
-  **and only if never fulfilled**. Worst case on keeper downtime is a stake refund,
-  never a wrong payout (fail-closed).
-- **Keeper liveness requirement (operational):** the settle keeper MUST call the
-  consumer's `settle()` within the 256-block window after each target block
-  (`targetBlockFor(consumer, id)` tells it when). Miss it and that pull becomes
-  refund-only after 48h.
+  **and only if never fulfilled**; fail-closed, never a wrong payout.
+- **Deploy wiring (operational, required):**
+  1. `VRF_SERVICE` env → the `BlockhashRandomnessServiceV3` address at deploy.
+  2. The service owner calls **`setSpinEngine(VRFServiceConductor)`** — one-shot
+     pairing; only the conductor may then request words.
+  3. **Fund the conductor with ETH** to pre-pay per-request fees; `healthy()` reports
+     false (consumers fail closed on new sales) when the float can't cover the fee.
+  4. The service's `deliver()` keeper must run (their infra) so `wordOf` becomes
+     available; the settle keeper then pulls it via `settle()`.
 
 ### Robinhood-Chain assumptions to VERIFY on-chain (compiles ≠ functional)
-The contracts are valid EVM and deploy on Robinhood Chain, but three integrations
-depend on live-chain behavior that must be confirmed on a testnet/fork before
-mainnet — they cannot be proven from the repo:
-1. **`block.number` / `blockhash`** — Arbitrum/Orbit make `block.number` L1-synced
-   (~12s). `Chains.blockTimeMs(4663)=12_000` reflects this, and `blockhash(target)`
-   must return a **non-zero, per-block** value inside the ~256-block window. Deploy
-   `MinerEntropyConductor` to a Robinhood testnet and confirm a commit→fulfill cycle
-   lands a non-zero word at the expected block; retune `blockTimeMs` if the cadence
-   differs. If `blockhash` is unusable, switch to an `ArbSys`-based scheme or a real
-   VRF.
+The contracts are valid EVM and deploy on Robinhood Chain, but the live integrations
+must be confirmed on a testnet/fork before mainnet — they can't be proven from the repo:
+1. **Randomness** — pair `VRFServiceConductor` with the live
+   `BlockhashRandomnessServiceV3` and confirm a full `commit → requestRandomWord →
+   service.deliver → wordOf → fulfill` cycle lands a non-zero word. (V3 header notes
+   the chain gotcha: `ArbSys.arbBlockHash()` throws here; the service uses plain
+   `block.number`/`blockhash` and retries `deliver()` on `TargetNotReached`.)
 2. **Pyth** — confirm the Pyth contract is deployed and has USD price feeds for ETH
    and each tokenized stock (feed ids) with acceptable staleness.
 3. **Uniswap V3** — confirm SwapRouter02 + WETH addresses and that each ETH↔stock
