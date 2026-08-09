@@ -87,7 +87,7 @@ contract Deploy is Script {
             a.router = vm.envAddress("SWAP_ROUTER");
             a.stockSample = vm.envAddress("STOCK_SAMPLE");
             a.conductor = Chains.entropyKind(block.chainid) == Chains.EntropyKind.Miner
-                ? address(new MinerEntropyConductor())
+                ? address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)))
                 : address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
         }
         a.poolDeployer = address(new MockPoolDeployer()); // replace with V3 adapter on mainnet

@@ -23,7 +23,7 @@ contract SecurityFixesTest is TestBase {
 
     // ---- C2: a third party cannot occupy a consumer's commitment id ----
     function test_C2_CommitIsNamespacedByCaller() public {
-        MinerEntropyConductor c = new MinerEntropyConductor();
+        MinerEntropyConductor c = new MinerEntropyConductor(250);
         bytes32 id = keccak256("round-1");
         address attacker = makeAddr("attacker");
         address machineAddr = makeAddr("machineAddr");

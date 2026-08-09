@@ -17,10 +17,11 @@ value in one place; the deploy script and frontend read from these.
 |---|---|---|
 | Primary chain | Robinhood Chain — chainId **4663**, ETH gas | `Chains.sol` |
 | Fallback chain | Base — chainId **8453** | `Chains.sol` |
-| Entropy backend (Robinhood) | Miner/DERP-style (`MinerEntropyConductor`) | `Chains.entropyKind` |
+| Entropy backend (Robinhood) | **Blockhash commit-reveal** (`MinerEntropyConductor`) — operator-trust; no VRF on-chain | `Chains.entropyKind` |
 | Entropy backend (Base) | Chainlink VRF v2.5 (`VRFEntropyConductor`) | `Chains.entropyKind` |
 | Entropy stall window | **30 min** (fail-closed threshold) | `EntropyConductorBase.STALL_WINDOW` |
-| Miner confirmations | **2 blocks** | `MinerEntropyConductor.CONFIRMATIONS` |
+| Blockhash target | `committedBlock + delay/blockTime + 2` (tracks `readyAt`) | `MinerEntropyConductor` |
+| Assumed block time (Robinhood) | **250 ms** (fastest-plausible; keeps hash in 256-block window) | `Chains.blockTimeMs` |
 
 ### The Floor
 | Config | Value used | Where |
@@ -205,11 +206,35 @@ deploy-time wiring step, see below), and pause of NEW ticket sales only. No admi
 can touch locked liquidity, player-owed funds, reserved prizes, bankroll stakes, or
 certificate vaults.
 
+### Entropy on Robinhood Chain — blockhash (operator-trust), by decision
+No two-party VRF (Chainlink / Pyth Entropy) is deployed on Robinhood Chain, so the
+Degen Roll **and** Roulette use `MinerEntropyConductor`: the word is
+`keccak(id, blockhash(targetBlock))`, where the target is a **future** block chosen
+to land at/after the commitment's `readyAt` (`committedBlock + delay/blockTime + 2`).
+This keeps the target's hash inside the 256-block (~64s) observable window even for
+the 10-minute Vault lane — a naive `commit + k` target would age out and brick the
+lane on a ~0.25s chain.
+
+- **Trust model:** the sequencer produces the target block, so it is the trust root
+  (operator-trust). Strictly weaker than a two-party VRF; accepted for launch and
+  swappable behind `IEntropyConductor` (migrated in the consumers behind a timelock)
+  for VRF/Pyth later with no change to the games.
+- **Anti-abort:** a player cannot decline a losing pull — `settle` is permissionless
+  (a keeper settles every round, win or lose) and refund is only available after 48h
+  **and only if never fulfilled**. Worst case on keeper downtime is a stake refund,
+  never a wrong payout (fail-closed).
+- **Keeper liveness requirement (operational):** the settle keeper MUST call the
+  consumer's `settle()` within the 256-block window after each target block
+  (`targetBlockFor(consumer, id)` tells it when). Miss it and that pull becomes
+  refund-only after 48h.
+
 ### Known follow-ups before mainnet
 - Wrap owner roles (fee-recipient / conductor migration) in a **3-day timelock**
   (`TimelockController`) at deploy; owners are currently EOAs/deployer for testnet.
 - Real Uniswap V3 adapter for `IPoolDeployer` + `INonfungiblePositionManager`.
-- Real Chainlink VRF v2.5 client in `VRFEntropyConductor` for Base.
+- Optional upgrade: swap blockhash entropy for a two-party VRF (Chainlink VRF v2.5
+  is wired in `VRFEntropyConductor` for chains that have a coordinator, e.g. Base) if
+  one becomes available on Robinhood Chain.
 - Decimals-aware oracle adapter for non-18-decimal stock tokens.
 - `forge test` including invariant + fuzz suites is authored under `contracts/test/`;
   run with the Foundry binary (this build environment could not install Foundry due
