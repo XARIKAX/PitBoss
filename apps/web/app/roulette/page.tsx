@@ -16,7 +16,6 @@ import { DemoBanner } from '@/components/demo';
 // ── Mirror of contracts/src/pit/Roulette.sol ────────────────────────────────
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const POCKETS = 37;
-// Physical European wheel sequence (clockwise from 0).
 const WHEEL_ORDER = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14,
   31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
@@ -71,15 +70,13 @@ function resolve(bet: Bet, pocket: number): { win: boolean; x: number } {
 type Hue = 'green' | 'red' | 'black';
 const hueOf = (n: number): Hue => (n === 0 ? 'green' : isRed(n) ? 'red' : 'black');
 
-// Palette
 const C = {
   red: '#e0403f',
-  redDim: '#7f1f24',
-  black: '#1c2636',
+  black: '#141b27',
   green: '#2fa15a',
-  rim: '#0a0e14',
   lime: '#c6f24e',
 };
+const cellBg = (h: Hue) => (h === 'green' ? C.green : h === 'red' ? C.red : C.black);
 
 // ── Geometry ────────────────────────────────────────────────────────────────
 function pt(cx: number, cy: number, r: number, deg: number): [number, number] {
@@ -94,51 +91,114 @@ function slicePath(cx: number, cy: number, rOut: number, rIn: number, a0: number
   return `M${x0o} ${y0o} A${rOut} ${rOut} 0 0 1 ${x1o} ${y1o} L${x1i} ${y1i} A${rIn} ${rIn} 0 0 0 ${x0i} ${y0i} Z`;
 }
 
-function Wheel({ rotation, spinning }: { rotation: number; spinning: boolean }) {
+// ── The wheel ───────────────────────────────────────────────────────────────
+function Wheel({
+  rotation,
+  ballRotation,
+  spinning,
+  landedHue,
+}: {
+  rotation: number;
+  ballRotation: number;
+  spinning: boolean;
+  landedHue: Hue | null;
+}) {
   const cx = 150,
-    cy = 150,
-    rOut = 146,
-    rIn = 96,
-    rNum = 121;
+    cy = 150;
+  const rBezel = 149,
+    rTrackOut = 140,
+    rRingOut = 130,
+    rRingIn = 90,
+    rNum = 111,
+    rBall = 135;
+  const ease = 'cubic-bezier(0.16,0.73,0.09,1)';
+
   return (
     <svg viewBox="0 0 300 300" className="h-full w-full">
       <defs>
-        <radialGradient id="hub" cx="50%" cy="42%" r="70%">
-          <stop offset="0%" stopColor="#233043" />
-          <stop offset="70%" stopColor="#0e141d" />
-          <stop offset="100%" stopColor="#070a0f" />
+        <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#38445a" />
+          <stop offset="45%" stopColor="#131a26" />
+          <stop offset="100%" stopColor="#05070b" />
+        </linearGradient>
+        <radialGradient id="gRed" gradientUnits="userSpaceOnUse" cx="150" cy="150" r="130">
+          <stop offset="0.66" stopColor="#ef5350" />
+          <stop offset="1" stopColor="#8f2321" />
         </radialGradient>
-        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.5" />
+        <radialGradient id="gBlack" gradientUnits="userSpaceOnUse" cx="150" cy="150" r="130">
+          <stop offset="0.66" stopColor="#28323f" />
+          <stop offset="1" stopColor="#0c111a" />
+        </radialGradient>
+        <radialGradient id="gGreen" gradientUnits="userSpaceOnUse" cx="150" cy="150" r="130">
+          <stop offset="0.66" stopColor="#3ac06d" />
+          <stop offset="1" stopColor="#1c6c3d" />
+        </radialGradient>
+        <radialGradient id="turret" cx="46%" cy="40%" r="70%">
+          <stop offset="0%" stopColor="#2b384c" />
+          <stop offset="55%" stopColor="#111823" />
+          <stop offset="100%" stopColor="#070a10" />
+        </radialGradient>
+        <radialGradient id="gloss" cx="38%" cy="30%" r="72%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+          <stop offset="42%" stopColor="#ffffff" stopOpacity="0.04" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="ball" cx="36%" cy="32%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="60%" stopColor="#e7ecf3" />
+          <stop offset="100%" stopColor="#aeb8c6" />
+        </radialGradient>
+        <filter id="wsh" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="3" stdDeviation="6" floodColor="#000" floodOpacity="0.55" />
+        </filter>
+        <filter id="bglow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="2.2" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
         </filter>
       </defs>
 
-      {/* Outer rim */}
-      <circle cx={cx} cy={cy} r={149} fill={C.rim} />
-      <circle cx={cx} cy={cy} r={147.5} fill="none" stroke="#2a3547" strokeWidth="1.2" />
+      {/* Bezel + ball track */}
+      <circle cx={cx} cy={cy} r={rBezel} fill="url(#bezel)" filter="url(#wsh)" />
+      <circle cx={cx} cy={cy} r={rTrackOut} fill="#090d14" />
+      <circle cx={cx} cy={cy} r={rTrackOut} fill="none" stroke="#39465c" strokeWidth="1" />
+      <circle cx={cx} cy={cy} r={rRingOut + 1} fill="none" stroke="#c6f24e" strokeOpacity="0.16" strokeWidth="1" />
 
-      {/* Rotating wheel */}
+      {/* Rotating wheel head */}
       <g
         style={{
           transform: `rotate(${rotation}deg)`,
           transformOrigin: '150px 150px',
-          transition: spinning ? 'transform 4.6s cubic-bezier(0.17,0.67,0.12,1)' : 'none',
+          transition: spinning ? `transform 4.8s ${ease}` : 'none',
         }}
       >
         {WHEEL_ORDER.map((n, i) => {
           const a0 = i * SEG;
           const a1 = (i + 1) * SEG;
           const hue = hueOf(n);
-          const fill = hue === 'green' ? C.green : hue === 'red' ? C.red : C.black;
+          const fill = hue === 'green' ? 'url(#gGreen)' : hue === 'red' ? 'url(#gRed)' : 'url(#gBlack)';
           const [tx, ty] = pt(cx, cy, rNum, a0 + SEG / 2);
           return (
             <g key={i}>
-              <path d={slicePath(cx, cy, rOut, rIn, a0, a1)} fill={fill} stroke="#0a0e14" strokeWidth="0.8" />
+              <path d={slicePath(cx, cy, rRingOut, rRingIn, a0, a1)} fill={fill} />
+              {/* fret separators */}
+              <line
+                {...(() => {
+                  const [x0, y0] = pt(cx, cy, rRingIn, a0);
+                  const [x1, y1] = pt(cx, cy, rRingOut, a0);
+                  return { x1: x0, y1: y0, x2: x1, y2: y1 };
+                })()}
+                stroke="#0a0e14"
+                strokeWidth="0.7"
+                strokeOpacity="0.7"
+              />
               <text
                 x={tx}
                 y={ty}
-                fill="#fff"
-                fontSize="8.5"
+                fill="#f4f7fb"
+                fontSize="8.4"
                 fontWeight="700"
                 textAnchor="middle"
                 dominantBaseline="central"
@@ -150,39 +210,106 @@ function Wheel({ rotation, spinning }: { rotation: number; spinning: boolean }) 
             </g>
           );
         })}
+        {/* ring edges */}
+        <circle cx={cx} cy={cy} r={rRingOut} fill="none" stroke="#05070b" strokeWidth="1.4" />
+        <circle cx={cx} cy={cy} r={rRingIn} fill="none" stroke="#05070b" strokeWidth="1.4" />
       </g>
 
-      {/* Center hub */}
-      <circle cx={cx} cy={cy} r={rIn - 2} fill="url(#hub)" stroke="#2a3547" strokeWidth="1.4" filter="url(#ds)" />
-      {/* Gold spinner cross */}
-      <g stroke={C.lime} strokeWidth="3.4" strokeLinecap="round">
-        <line x1={cx} y1={cy - 46} x2={cx} y2={cy + 46} />
-        <line x1={cx - 46} y1={cy} x2={cx + 46} y2={cy} />
+      {/* Center turret / spinner */}
+      <circle cx={cx} cy={cy} r={rRingIn - 1} fill="url(#turret)" stroke="#2a3547" strokeWidth="1.2" />
+      <circle cx={cx} cy={cy} r={rRingIn - 10} fill="none" stroke="#1a2330" strokeWidth="1" />
+      <g
+        style={{
+          transform: `rotate(${rotation * 0.5}deg)`,
+          transformOrigin: '150px 150px',
+          transition: spinning ? `transform 4.8s ${ease}` : 'none',
+        }}
+      >
+        <g stroke={C.lime} strokeWidth="3.2" strokeLinecap="round" opacity="0.95">
+          <line x1={cx} y1={cy - 44} x2={cx} y2={cy + 44} />
+          <line x1={cx - 44} y1={cy} x2={cx + 44} y2={cy} />
+        </g>
+        <circle cx={cx} cy={cy - 44} r="3.4" fill={C.lime} />
+        <circle cx={cx} cy={cy + 44} r="3.4" fill={C.lime} />
+        <circle cx={cx - 44} cy={cy} r="3.4" fill={C.lime} />
+        <circle cx={cx + 44} cy={cy} r="3.4" fill={C.lime} />
       </g>
-      <circle cx={cx} cy={cy} r="7.5" fill={C.lime} />
-      <circle cx={cx} cy={cy - 46} r="4" fill={C.lime} />
-      <circle cx={cx} cy={cy + 46} r="4" fill={C.lime} />
-      <circle cx={cx - 46} cy={cy} r="4" fill={C.lime} />
-      <circle cx={cx + 46} cy={cy} r="4" fill={C.lime} />
+      <circle cx={cx} cy={cy} r="12" fill="url(#turret)" stroke={C.lime} strokeWidth="1.6" />
+      <circle cx={cx} cy={cy} r="4" fill={C.lime} />
 
-      {/* Top pointer */}
-      <path d="M150 6 l7 13 h-14 Z" fill={C.lime} stroke="#0a0e14" strokeWidth="0.8" />
+      {/* Ball */}
+      <g
+        style={{
+          transform: `rotate(${ballRotation}deg)`,
+          transformOrigin: '150px 150px',
+          transition: spinning ? `transform 4.8s ${ease}` : 'none',
+        }}
+      >
+        <circle
+          cx={cx}
+          cy={cy - rBall}
+          r="5.6"
+          fill="url(#ball)"
+          filter={!spinning && landedHue ? 'url(#bglow)' : undefined}
+        />
+        <circle cx={cx - 1.6} cy={cy - rBall - 1.6} r="1.6" fill="#fff" opacity="0.9" />
+      </g>
+
+      {/* Gloss + pointer */}
+      <circle cx={cx} cy={cy} r={rBezel} fill="url(#gloss)" pointerEvents="none" />
+      <path d="M150 4 l8 15 h-16 Z" fill={C.lime} stroke="#05070b" strokeWidth="0.8" />
     </svg>
   );
 }
 
-// ── Betting board ───────────────────────────────────────────────────────────
-const CHIPS = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5];
-
-function sameBet(a: Bet | null, b: Bet) {
-  return !!a && a.kind === b.kind && a.selection === b.selection;
+// ── Casino chip ─────────────────────────────────────────────────────────────
+function ChipSVG({ active }: { active: boolean }) {
+  const edge = active ? '#0a0e08' : '#0b0f16';
+  const body = active ? '#c6f24e' : '#26374a';
+  const bodyDim = active ? '#a7d43a' : '#1a2634';
+  const ink = active ? '#0a0e08' : '#8aa0b6';
+  return (
+    <svg viewBox="0 0 44 44" className="h-full w-full">
+      <circle cx="22" cy="22" r="21" fill={body} />
+      {Array.from({ length: 8 }, (_, i) => (
+        <rect
+          key={i}
+          x="20.4"
+          y="1.2"
+          width="3.2"
+          height="6.2"
+          rx="1.2"
+          fill={edge}
+          transform={`rotate(${i * 45} 22 22)`}
+        />
+      ))}
+      <circle cx="22" cy="22" r="15.5" fill={bodyDim} />
+      <circle cx="22" cy="22" r="15.5" fill="none" stroke={edge} strokeWidth="1" strokeDasharray="2 3" opacity="0.6" />
+      <circle cx="22" cy="22" r="11" fill={body} />
+      <circle cx="22" cy="22" r="11" fill="none" stroke={ink} strokeWidth="0.8" opacity="0.35" />
+    </svg>
+  );
 }
+
+/** Placed-bet marker: a stacked chip token dropped on a cell. */
+function ChipMark() {
+  return (
+    <span className="pointer-events-none absolute -right-2 -top-2 h-5 w-5 drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
+      <ChipSVG active />
+    </span>
+  );
+}
+
+// ── Board ───────────────────────────────────────────────────────────────────
+const CHIPS = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5];
+const sameBet = (a: Bet | null, b: Bet) => !!a && a.kind === b.kind && a.selection === b.selection;
 
 export default function RoulettePage() {
   const [mode, setMode] = useState<'manual' | 'auto'>('manual');
   const [stake, setStake] = useState(0.01);
   const [bet, setBet] = useState<Bet | null>({ kind: 'red', selection: 0, label: 'Red' });
   const [rotation, setRotation] = useState(0);
+  const [ballRotation, setBallRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<{ win: boolean; x: number; pocket: number } | null>(null);
   const [history, setHistory] = useState<number[]>([]);
@@ -191,8 +318,7 @@ export default function RoulettePage() {
   const potential = useMemo(() => (bet ? stake * multiplierX(bet.kind) : 0), [bet, stake]);
 
   function place(b: Bet) {
-    if (spinning) return;
-    setBet(b);
+    if (!spinning) setBet(b);
   }
 
   function spin() {
@@ -204,37 +330,36 @@ export default function RoulettePage() {
     const landed = Math.floor(Math.random() * POCKETS);
     const idx = WHEEL_ORDER.indexOf(landed);
     const mid = idx * SEG + SEG / 2;
-    setRotation((r) => {
-      const base = Math.ceil(r / 360) * 360;
-      return base + 360 * 6 + ((360 - mid) % 360);
-    });
+    setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 6 + ((360 - mid) % 360));
+    setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 5);
 
     window.setTimeout(() => {
       const r = resolve(bet, landed);
       setResult({ ...r, pocket: landed });
-      setHistory((h) => [landed, ...h].slice(0, 14));
+      setHistory((h) => [landed, ...h].slice(0, 16));
       setSpinning(false);
       busy.current = false;
-    }, 4700);
+    }, 4900);
   }
 
-  // Number cell → straight bet.
+  const winCell = result && !spinning ? result.pocket : null;
+
   function NumCell({ n }: { n: number }) {
     const hue = hueOf(n);
     const active = bet?.kind === 'straight' && bet.selection === n;
-    const bg = hue === 'green' ? C.green : hue === 'red' ? C.red : C.black;
+    const isWin = winCell === n;
     const col = n === 0 ? 1 : Math.ceil(n / 3) + 1;
     const row = n === 0 ? '1 / span 3' : `${n % 3 === 0 ? 1 : n % 3 === 2 ? 2 : 3}`;
     return (
       <button
         onClick={() => place({ kind: 'straight', selection: n, label: n === 0 ? 'Zero' : `Number ${n}` })}
-        style={{ gridColumn: String(col), gridRow: row, background: bg }}
-        className={`relative grid place-items-center rounded-[5px] font-mono text-[13px] font-bold tabular-nums text-white transition ${
-          active ? 'z-10 ring-2 ring-lime' : 'hover:brightness-125'
+        style={{ gridColumn: String(col), gridRow: row, background: cellBg(hue) }}
+        className={`felt-cell relative grid place-items-center rounded-[6px] font-mono text-[13px] font-bold tabular-nums text-white transition-all ${
+          isWin ? 'z-20 ring-2 ring-lime shadow-[0_0_18px_2px_rgba(198,242,78,0.55)]' : active ? 'z-10 ring-2 ring-lime' : 'hover:brightness-125'
         }`}
       >
         {n}
-        {active ? <Chip /> : null}
+        {active ? <ChipMark /> : null}
       </button>
     );
   }
@@ -251,23 +376,24 @@ export default function RoulettePage() {
     tone?: 'slate' | 'red' | 'black';
   }) {
     const active = sameBet(bet, b);
-    const bg = tone === 'red' ? C.red : tone === 'black' ? C.black : 'rgba(255,255,255,0.03)';
+    const bg = tone === 'red' ? C.red : tone === 'black' ? C.black : 'rgba(255,255,255,0.035)';
     return (
       <button
         onClick={() => place(b)}
         style={{ ...style, background: bg }}
-        className={`relative grid place-items-center rounded-[5px] border border-white/10 px-2 py-2.5 font-mono text-[11px] uppercase tracking-wide text-paper transition ${
+        className={`felt-cell relative grid place-items-center rounded-[6px] border border-white/10 px-2 py-2.5 font-mono text-[11px] uppercase tracking-wide text-paper transition-all ${
           active ? 'z-10 ring-2 ring-lime' : 'hover:border-lime/40 hover:brightness-125'
         }`}
       >
         {children}
-        {active ? <Chip /> : null}
+        {active ? <ChipMark /> : null}
       </button>
     );
   }
 
   return (
     <>
+      <style>{`.felt-cell{box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),inset 0 -2px 4px rgba(0,0,0,0.35);}`}</style>
       <PageHeader
         eyebrow="The Pit · New table"
         title="Roulette."
@@ -300,18 +426,23 @@ export default function RoulettePage() {
             </div>
 
             <p className="label mt-5">Chip value</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               {CHIPS.map((v) => (
                 <button
                   key={v}
                   onClick={() => setStake(v)}
-                  className={`grid h-11 w-11 place-items-center rounded-full border-2 font-mono text-[10px] font-bold transition ${
-                    stake === v
-                      ? 'border-lime bg-lime/15 text-lime'
-                      : 'border-line bg-black/30 text-mute hover:border-lime/50 hover:text-paper'
+                  className={`relative aspect-square transition ${
+                    stake === v ? 'scale-105 drop-shadow-[0_0_10px_rgba(198,242,78,0.4)]' : 'opacity-80 hover:opacity-100'
                   }`}
                 >
-                  {v}
+                  <ChipSVG active={stake === v} />
+                  <span
+                    className={`absolute inset-0 grid place-items-center font-mono text-[10px] font-bold ${
+                      stake === v ? 'text-black' : 'text-paper'
+                    }`}
+                  >
+                    {v}
+                  </span>
                 </button>
               ))}
             </div>
@@ -360,64 +491,69 @@ export default function RoulettePage() {
             <button
               onClick={spin}
               disabled={spinning || !bet || stake <= 0 || mode === 'auto'}
-              className="mt-4 w-full rounded-xl bg-lime py-3.5 font-mono text-[13px] font-bold uppercase tracking-wide text-black transition hover:brightness-110 disabled:opacity-50"
+              className="mt-4 w-full rounded-xl bg-lime py-3.5 font-mono text-[13px] font-bold uppercase tracking-[0.12em] text-black shadow-[0_0_24px_-4px_rgba(198,242,78,0.6)] transition hover:brightness-110 disabled:opacity-50 disabled:shadow-none"
             >
               {spinning ? 'Spinning…' : mode === 'auto' ? 'Auto — soon' : 'Spin'}
             </button>
           </div>
 
           {/* ── Wheel + table ── */}
-          <div className="panel surface-hero p-5">
-            <div className="flex flex-col items-center gap-4">
+          <div className="panel surface-hero relative overflow-hidden p-5">
+            {/* atmospheric glow */}
+            <div
+              className="pointer-events-none absolute left-1/2 top-4 h-[360px] w-[360px] -translate-x-1/2 rounded-full"
+              style={{ background: 'radial-gradient(circle, rgba(198,242,78,0.10), transparent 62%)' }}
+            />
+            <div className="relative flex flex-col items-center gap-4">
               {/* Wheel */}
-              <div className="relative w-full max-w-[280px]">
-                <div className="aspect-square">
-                  <Wheel rotation={rotation} spinning={spinning} />
-                </div>
-                {/* Result badge */}
-                <div className="mt-3 min-h-[46px]">
-                  {result ? (
-                    <div
-                      className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
-                        result.win ? 'border-lime/50 bg-lime/[0.06]' : 'border-line bg-black/40'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="grid h-7 w-7 place-items-center rounded-md font-mono text-xs font-bold text-white"
-                          style={{
-                            background:
-                              hueOf(result.pocket) === 'green'
-                                ? C.green
-                                : hueOf(result.pocket) === 'red'
-                                  ? C.red
-                                  : C.black,
-                          }}
-                        >
-                          {result.pocket}
-                        </span>
-                        <span className="font-mono text-[11px] uppercase tracking-wide text-mute">
-                          {hueOf(result.pocket)}
-                        </span>
-                      </span>
-                      <span
-                        className={`font-mono text-[12px] font-bold uppercase ${
-                          result.win ? 'text-lime' : 'text-mute'
-                        }`}
-                      >
-                        {result.win ? `Win · ${(stake * result.x).toFixed(4)}` : 'No win'}
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="pt-3 text-center text-[11px] text-dim">Place a chip, then spin.</p>
-                  )}
+              <div className="relative w-full max-w-[300px]">
+                <div className="aspect-square drop-shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
+                  <Wheel
+                    rotation={rotation}
+                    ballRotation={ballRotation}
+                    spinning={spinning}
+                    landedHue={result ? hueOf(result.pocket) : null}
+                  />
                 </div>
               </div>
 
+              {/* Result badge */}
+              <div className="min-h-[52px] w-full max-w-[440px]">
+                {result ? (
+                  <div
+                    className={`flex items-center justify-between rounded-xl border px-4 py-3 transition ${
+                      result.win
+                        ? 'border-lime/60 bg-lime/[0.07] shadow-[0_0_26px_-6px_rgba(198,242,78,0.6)]'
+                        : 'border-line bg-black/40'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className="grid h-8 w-8 place-items-center rounded-lg font-mono text-sm font-bold text-white shadow-inner"
+                        style={{ background: cellBg(hueOf(result.pocket)) }}
+                      >
+                        {result.pocket}
+                      </span>
+                      <span className="font-mono text-[11px] uppercase tracking-wide text-mute">
+                        {hueOf(result.pocket)}
+                      </span>
+                    </span>
+                    <span
+                      className={`font-mono text-[13px] font-bold uppercase tracking-wide ${
+                        result.win ? 'text-lime' : 'text-mute'
+                      }`}
+                    >
+                      {result.win ? `Win · ${(stake * result.x).toFixed(4)} ETH` : 'No win'}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="pt-3 text-center text-[11px] text-dim">Place a chip, then spin.</p>
+                )}
+              </div>
             </div>
 
-            {/* Betting felt — full width below the wheel */}
-            <div className="mt-5 w-full overflow-x-auto">
+            {/* Betting felt */}
+            <div className="relative mt-5 w-full overflow-x-auto rounded-xl border border-white/5 bg-[radial-gradient(circle_at_50%_0%,rgba(47,161,90,0.08),transparent_60%)] p-3">
               <div className="mx-auto min-w-[600px] max-w-[900px]">
                 <div
                   className="grid gap-1.5"
@@ -426,79 +562,72 @@ export default function RoulettePage() {
                     gridAutoRows: 'minmax(48px, auto)',
                   }}
                 >
-                    <NumCell n={0} />
-                    {Array.from({ length: 36 }, (_, i) => (
-                      <NumCell key={i + 1} n={i + 1} />
-                    ))}
-                    {/* 2:1 column bets */}
-                    {[
-                      { row: 1, sel: 2 },
-                      { row: 2, sel: 1 },
-                      { row: 3, sel: 0 },
-                    ].map(({ row, sel }) => (
-                      <OutCell
-                        key={row}
-                        b={{ kind: 'column', selection: sel, label: `Column ${sel + 1} (2:1)` }}
-                        style={{ gridColumn: '14', gridRow: String(row) }}
-                      >
-                        2:1
-                      </OutCell>
-                    ))}
-                    {/* Dozens */}
-                    <OutCell b={{ kind: 'dozen', selection: 0, label: '1st 12' }} style={{ gridColumn: '2 / span 4', gridRow: '4' }}>
-                      1 to 12
+                  <NumCell n={0} />
+                  {Array.from({ length: 36 }, (_, i) => (
+                    <NumCell key={i + 1} n={i + 1} />
+                  ))}
+                  {[
+                    { row: 1, sel: 2 },
+                    { row: 2, sel: 1 },
+                    { row: 3, sel: 0 },
+                  ].map(({ row, sel }) => (
+                    <OutCell
+                      key={row}
+                      b={{ kind: 'column', selection: sel, label: `Column ${sel + 1} (2:1)` }}
+                      style={{ gridColumn: '14', gridRow: String(row) }}
+                    >
+                      2:1
                     </OutCell>
-                    <OutCell b={{ kind: 'dozen', selection: 1, label: '2nd 12' }} style={{ gridColumn: '6 / span 4', gridRow: '4' }}>
-                      13 to 24
-                    </OutCell>
-                    <OutCell b={{ kind: 'dozen', selection: 2, label: '3rd 12' }} style={{ gridColumn: '10 / span 4', gridRow: '4' }}>
-                      25 to 36
-                    </OutCell>
-                    {/* Even-money row */}
-                    <OutCell b={{ kind: 'low', selection: 0, label: '1–18' }} style={{ gridColumn: '2 / span 2', gridRow: '5' }}>
-                      1 to 18
-                    </OutCell>
-                    <OutCell b={{ kind: 'even', selection: 0, label: 'Even' }} style={{ gridColumn: '4 / span 2', gridRow: '5' }}>
-                      Even
-                    </OutCell>
-                    <OutCell b={{ kind: 'red', selection: 0, label: 'Red' }} tone="red" style={{ gridColumn: '6 / span 2', gridRow: '5' }}>
-                      Red
-                    </OutCell>
-                    <OutCell b={{ kind: 'black', selection: 0, label: 'Black' }} tone="black" style={{ gridColumn: '8 / span 2', gridRow: '5' }}>
-                      Black
-                    </OutCell>
-                    <OutCell b={{ kind: 'odd', selection: 0, label: 'Odd' }} style={{ gridColumn: '10 / span 2', gridRow: '5' }}>
-                      Odd
-                    </OutCell>
-                    <OutCell b={{ kind: 'high', selection: 0, label: '19–36' }} style={{ gridColumn: '12 / span 2', gridRow: '5' }}>
-                      19 to 36
-                    </OutCell>
-                  </div>
-
-                  {/* Recent */}
-                  {history.length > 0 ? (
-                    <div className="mt-4 flex items-center gap-2">
-                      <span className="label shrink-0">Recent</span>
-                      <div className="flex flex-wrap gap-1">
-                        {history.map((n, i) => (
-                          <span
-                            key={`${n}-${i}`}
-                            className="grid h-6 w-6 place-items-center rounded font-mono text-[10px] font-bold tabular-nums text-white"
-                            style={{
-                              background:
-                                hueOf(n) === 'green' ? C.green : hueOf(n) === 'red' ? C.red : C.black,
-                            }}
-                          >
-                            {n}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                  ))}
+                  <OutCell b={{ kind: 'dozen', selection: 0, label: '1st 12' }} style={{ gridColumn: '2 / span 4', gridRow: '4' }}>
+                    1 to 12
+                  </OutCell>
+                  <OutCell b={{ kind: 'dozen', selection: 1, label: '2nd 12' }} style={{ gridColumn: '6 / span 4', gridRow: '4' }}>
+                    13 to 24
+                  </OutCell>
+                  <OutCell b={{ kind: 'dozen', selection: 2, label: '3rd 12' }} style={{ gridColumn: '10 / span 4', gridRow: '4' }}>
+                    25 to 36
+                  </OutCell>
+                  <OutCell b={{ kind: 'low', selection: 0, label: '1–18' }} style={{ gridColumn: '2 / span 2', gridRow: '5' }}>
+                    1 to 18
+                  </OutCell>
+                  <OutCell b={{ kind: 'even', selection: 0, label: 'Even' }} style={{ gridColumn: '4 / span 2', gridRow: '5' }}>
+                    Even
+                  </OutCell>
+                  <OutCell b={{ kind: 'red', selection: 0, label: 'Red' }} tone="red" style={{ gridColumn: '6 / span 2', gridRow: '5' }}>
+                    Red
+                  </OutCell>
+                  <OutCell b={{ kind: 'black', selection: 0, label: 'Black' }} tone="black" style={{ gridColumn: '8 / span 2', gridRow: '5' }}>
+                    Black
+                  </OutCell>
+                  <OutCell b={{ kind: 'odd', selection: 0, label: 'Odd' }} style={{ gridColumn: '10 / span 2', gridRow: '5' }}>
+                    Odd
+                  </OutCell>
+                  <OutCell b={{ kind: 'high', selection: 0, label: '19–36' }} style={{ gridColumn: '12 / span 2', gridRow: '5' }}>
+                    19 to 36
+                  </OutCell>
                 </div>
+
+                {history.length > 0 ? (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="label shrink-0">Recent</span>
+                    <div className="flex flex-wrap gap-1">
+                      {history.map((n, i) => (
+                        <span
+                          key={`${n}-${i}`}
+                          className="grid h-6 w-6 place-items-center rounded font-mono text-[10px] font-bold tabular-nums text-white shadow-inner"
+                          style={{ background: cellBg(hueOf(n)) }}
+                        >
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
+        </div>
 
         {/* Payouts + mechanics */}
         <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -551,14 +680,5 @@ export default function RoulettePage() {
         </div>
       </Section>
     </>
-  );
-}
-
-/** A small lime chip marker dropped on the selected cell. */
-function Chip() {
-  return (
-    <span className="pointer-events-none absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border-2 border-black bg-lime text-[7px] font-bold text-black shadow">
-      ●
-    </span>
   );
 }
