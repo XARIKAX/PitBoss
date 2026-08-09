@@ -21,6 +21,7 @@ export interface Deployments {
   CertificateCounter?: Address;
   BearerCertificate?: Address;
   DegenRollFactory?: Address;
+  RouletteWheelFactory?: Address;
   LiquidityLocker?: Address;
   LoanVault?: Address;
   LauncherFactory?: Address;
@@ -46,6 +47,7 @@ export interface Config {
   addresses: {
     houseBook?: Address;
     factory?: Address;
+    rouletteFactory?: Address;
     conductor?: Address;
     activation?: Address;
     floorPosition?: Address;
@@ -133,6 +135,7 @@ export function loadConfig(): Config {
     addresses: {
       houseBook: pick("HOUSE_BOOK_ADDRESS", "HouseBook"),
       factory: pick("FACTORY_ADDRESS", "DegenRollFactory"),
+      rouletteFactory: pick("ROULETTE_FACTORY_ADDRESS", "RouletteWheelFactory"),
       conductor: pick("CONDUCTOR_ADDRESS", "EntropyConductor"),
       activation: pick("ACTIVATION_ADDRESS", "ActivationManager"),
       floorPosition: pick("FLOOR_POSITION_ADDRESS", "FloorPosition"),

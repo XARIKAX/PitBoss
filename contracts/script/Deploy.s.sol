@@ -15,6 +15,7 @@ import {ActivationManager} from "../src/activation/ActivationManager.sol";
 import {BearerCertificate} from "../src/pit/BearerCertificate.sol";
 import {CertificateCounter} from "../src/pit/CertificateCounter.sol";
 import {DegenRollFactory} from "../src/pit/DegenRollFactory.sol";
+import {RouletteWheelFactory} from "../src/pit/RouletteWheelFactory.sol";
 import {LiquidityLocker} from "../src/locker/LiquidityLocker.sol";
 import {LoanVault} from "../src/loans/LoanVault.sol";
 import {OpeningBell} from "../src/launcher/OpeningBell.sol";
@@ -50,6 +51,7 @@ contract Deploy is Script {
         address certificate;
         address counter;
         address rollFactory;
+        address rouletteFactory;
         address locker;
         address loans;
         address bell;
@@ -144,6 +146,27 @@ contract Deploy is Script {
             floor.setBumper(machine, true);
         }
 
+        // ---- roulette factory + sample wheel ----
+        RouletteWheelFactory rFactory = new RouletteWheelFactory(
+            RouletteWheelFactory.Wiring({
+                conductor: a.conductor,
+                houseBook: a.book,
+                oracle: a.oracle,
+                router: a.router,
+                certificate: a.certificate,
+                boss: a.boss,
+                activation: a.activation,
+                floor: a.floor,
+                protocolReserve: protocolReserve
+            })
+        );
+        a.rouletteFactory = address(rFactory);
+        if (useMocks) {
+            address wheel = rFactory.createWheel(a.stockSample, msg.sender);
+            cert.setIssuer(wheel, true);
+            floor.setBumper(wheel, true);
+        }
+
         // ---- locker + loans ----
         a.locker = address(new LiquidityLocker(a.book));
         LoanVault loans = new LoanVault(a.boss, a.pit, a.amm, a.book, a.oracle, protocolReserve);
@@ -184,6 +207,7 @@ contract Deploy is Script {
         vm.serializeAddress(o, "BearerCertificate", a.certificate);
         vm.serializeAddress(o, "CertificateCounter", a.counter);
         vm.serializeAddress(o, "DegenRollFactory", a.rollFactory);
+        vm.serializeAddress(o, "RouletteWheelFactory", a.rouletteFactory);
         vm.serializeAddress(o, "LiquidityLocker", a.locker);
         vm.serializeAddress(o, "LoanVault", a.loans);
         vm.serializeAddress(o, "OpeningBell", a.bell);

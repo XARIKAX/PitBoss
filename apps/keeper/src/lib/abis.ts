@@ -37,6 +37,19 @@ export const entropyConductorAbi = [
     outputs: [{type: "bool"}],
   },
   {
+    // MinerEntropyConductor: the target block whose hash seeds a consumer's
+    // commitment. Lets the settle keeper know when a round is ready and by which
+    // block it must settle (before target + ~256 ages the hash out).
+    type: "function",
+    name: "targetBlockFor",
+    stateMutability: "view",
+    inputs: [
+      {name: "consumer", type: "address"},
+      {name: "id", type: "bytes32"},
+    ],
+    outputs: [{type: "uint256"}],
+  },
+  {
     type: "event",
     name: "Committed",
     inputs: [
@@ -178,6 +191,20 @@ export const degenRollAbi = [
     outputs: [{name: "stockOut", type: "uint256"}],
   },
   {
+    type: "function",
+    name: "settle",
+    stateMutability: "nonpayable",
+    inputs: [{name: "roundId", type: "uint256"}],
+    outputs: [{name: "prize", type: "uint256"}],
+  },
+  {
+    type: "function",
+    name: "refund",
+    stateMutability: "nonpayable",
+    inputs: [{name: "roundId", type: "uint256"}],
+    outputs: [],
+  },
+  {
     type: "event",
     name: "Bought",
     inputs: [
@@ -186,6 +213,15 @@ export const degenRollAbi = [
       {name: "lane", type: "uint8", indexed: false},
       {name: "ticketEth", type: "uint256", indexed: false},
       {name: "notional", type: "uint256", indexed: false},
+    ],
+  },
+  {
+    type: "event",
+    name: "Refunded",
+    inputs: [
+      {name: "roundId", type: "uint256", indexed: true},
+      {name: "player", type: "address", indexed: true},
+      {name: "amount", type: "uint256", indexed: false},
     ],
   },
   {
@@ -276,6 +312,106 @@ export const openingBellAbi = [
       {name: "launchId", type: "uint256", indexed: true},
       {name: "participant", type: "address", indexed: true},
       {name: "bossId", type: "uint256", indexed: true},
+      {name: "amount", type: "uint256", indexed: false},
+    ],
+  },
+] as const;
+
+// ----------------------------------------------------------- RouletteWheelFactory
+export const rouletteWheelFactoryAbi = [
+  {
+    type: "function",
+    name: "wheelCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{type: "uint256"}],
+  },
+  {
+    type: "function",
+    name: "allWheels",
+    stateMutability: "view",
+    inputs: [{name: "i", type: "uint256"}],
+    outputs: [{type: "address"}],
+  },
+  {
+    type: "event",
+    name: "WheelCreated",
+    inputs: [
+      {name: "stock", type: "address", indexed: true},
+      {name: "wheel", type: "address", indexed: true},
+      {name: "creator", type: "address", indexed: true},
+    ],
+  },
+] as const;
+
+// ------------------------------------------------------------------ RouletteWheel
+// Same bankroll/entropy surface as DegenRoll; the settle keeper drives both and
+// restock handles both. Rounds are "spins" here.
+export const rouletteWheelAbi = [
+  {type: "function", name: "stock", stateMutability: "view", inputs: [], outputs: [{type: "address"}]},
+  {type: "function", name: "ethFloat", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
+  {type: "function", name: "totalReserved", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
+  {type: "function", name: "freeStock", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
+  {
+    type: "function",
+    name: "totalBankrollStock",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{type: "uint256"}],
+  },
+  {
+    type: "function",
+    name: "restock",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [{name: "stockOut", type: "uint256"}],
+  },
+  {
+    type: "function",
+    name: "settle",
+    stateMutability: "nonpayable",
+    inputs: [{name: "spinId", type: "uint256"}],
+    outputs: [{name: "prize", type: "uint256"}],
+  },
+  {
+    type: "function",
+    name: "refund",
+    stateMutability: "nonpayable",
+    inputs: [{name: "spinId", type: "uint256"}],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "SpinBought",
+    inputs: [
+      {name: "spinId", type: "uint256", indexed: true},
+      {name: "player", type: "address", indexed: true},
+      {name: "lane", type: "uint8", indexed: false},
+      {name: "bet", type: "uint8", indexed: false},
+      {name: "selection", type: "uint8", indexed: false},
+      {name: "stakeEth", type: "uint256", indexed: false},
+      {name: "notional", type: "uint256", indexed: false},
+    ],
+  },
+  {
+    type: "event",
+    name: "SpinSettled",
+    inputs: [
+      {name: "spinId", type: "uint256", indexed: true},
+      {name: "player", type: "address", indexed: true},
+      {name: "word", type: "uint256", indexed: false},
+      {name: "pocket", type: "uint256", indexed: false},
+      {name: "win", type: "bool", indexed: false},
+      {name: "prize", type: "uint256", indexed: false},
+      {name: "wasSealed", type: "bool", indexed: false},
+    ],
+  },
+  {
+    type: "event",
+    name: "SpinRefunded",
+    inputs: [
+      {name: "spinId", type: "uint256", indexed: true},
+      {name: "player", type: "address", indexed: true},
       {name: "amount", type: "uint256", indexed: false},
     ],
   },

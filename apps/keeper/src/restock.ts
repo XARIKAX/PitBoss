@@ -1,18 +1,22 @@
 /**
- * restock — keeps Degen Roll bankrolls stocked.
+ * restock — keeps both Pit games' bankrolls stocked (Degen Roll + Roulette).
  *
- * Each settle skims a 10% edge and feeds the 90% net into the machine's `ethFloat`.
+ * Each settle skims the edge/rake and feeds the net into the machine's `ethFloat`.
  * `restock()` converts that ETH float into bankroll stock at the oracle mark
- * (permissionless). This bot walks every machine registered on the factory and
- * restocks when there is float to convert AND free inventory is running short of
- * the headroom it wants against open reserves (each open pull reserves worst-case
- * 50x). Converting float -> stock replenishes the inventory that backs tickets.
+ * (permissionless). This bot walks every Degen Roll machine and Roulette wheel
+ * registered on their factories and restocks when there is float to convert AND
+ * free inventory is short of the headroom it wants against open reserves.
  *
- * Stateless & resumable: machine set and balances are read fresh each tick.
+ * Stateless & resumable: consumer set and balances are read fresh each tick.
  */
 
-import {formatEther, getContract, type Address} from "viem";
-import {degenRollAbi, degenRollFactoryAbi} from "./lib/abis.js";
+import {formatEther, getContract, type Abi, type Address} from "viem";
+import {
+  degenRollAbi,
+  degenRollFactoryAbi,
+  rouletteWheelAbi,
+  rouletteWheelFactoryAbi,
+} from "./lib/abis.js";
 import {attempt, Backoff} from "./lib/backoff.js";
 import {makeClients, requireWallet} from "./lib/client.js";
 import {loadConfig} from "./lib/config.js";
@@ -20,27 +24,94 @@ import {createLogger} from "./lib/log.js";
 import {runLoop} from "./lib/runtime.js";
 
 const BOT = "restock";
-// Want free inventory to be at least this fraction (bps) of open reserves before
-// considering the machine "stocked". Below it, and with float on hand, restock.
 const MIN_FREE_BPS = BigInt(process.env.RESTOCK_MIN_FREE_BPS ?? "2000"); // 20%
-// Minimum float worth converting (avoids dust restocks that just pay gas).
 const MIN_FLOAT_WEI = BigInt(process.env.RESTOCK_MIN_FLOAT_WEI ?? "1000000000000000"); // 0.001 ETH
 
-async function discoverMachines(
-  publicClient: ReturnType<typeof makeClients>["publicClient"],
+type PublicClient = ReturnType<typeof makeClients>["publicClient"];
+type Logger = ReturnType<typeof createLogger>;
+interface Consumer {
+  addr: Address;
+  abi: Abi;
+  kind: string;
+}
+
+async function fromFactory(
+  publicClient: PublicClient,
   factory: Address,
+  factoryAbi: Abi,
+  countFn: string,
+  listFn: string,
+  abi: Abi,
+  kind: string,
   backoff: Backoff,
-  log: ReturnType<typeof createLogger>,
-): Promise<Address[]> {
+  log: Logger,
+): Promise<Consumer[]> {
+  const f: any = getContract({address: factory, abi: factoryAbi, client: publicClient});
+  const count = (await attempt(() => f.read[countFn](), {
+    retries: 5,
+    backoff,
+    log,
+    label: `${kind}.${countFn}`,
+  })) as bigint;
+  const out: Consumer[] = [];
+  for (let i = 0n; i < count; i++) {
+    const addr = (await attempt(() => f.read[listFn]([i]), {
+      retries: 5,
+      backoff,
+      log,
+      label: `${kind}.${listFn}`,
+    })) as Address;
+    out.push({addr, abi, kind});
+  }
+  return out;
+}
+
+async function discoverConsumers(
+  publicClient: PublicClient,
+  degenFactory: Address | undefined,
+  rouletteFactory: Address | undefined,
+  backoff: Backoff,
+  log: Logger,
+): Promise<Consumer[]> {
+  // Explicit override (comma-separated Degen Roll machines) still supported.
   const override = process.env.MACHINES;
   if (override) {
-    return override.split(",").map((s) => s.trim()).filter(Boolean) as Address[];
+    return override
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((addr) => ({addr: addr as Address, abi: degenRollAbi as Abi, kind: "degen"}));
   }
-  const f = getContract({address: factory, abi: degenRollFactoryAbi, client: publicClient});
-  const count = await attempt(() => f.read.machineCount(), {retries: 5, backoff, log, label: "machineCount"});
-  const out: Address[] = [];
-  for (let i = 0n; i < count; i++) {
-    out.push(await attempt(() => f.read.allMachines([i]), {retries: 5, backoff, log, label: "allMachines"}));
+  const out: Consumer[] = [];
+  if (degenFactory) {
+    out.push(
+      ...(await fromFactory(
+        publicClient,
+        degenFactory,
+        degenRollFactoryAbi as Abi,
+        "machineCount",
+        "allMachines",
+        degenRollAbi as Abi,
+        "degen",
+        backoff,
+        log,
+      )),
+    );
+  }
+  if (rouletteFactory) {
+    out.push(
+      ...(await fromFactory(
+        publicClient,
+        rouletteFactory,
+        rouletteWheelFactoryAbi as Abi,
+        "wheelCount",
+        "allWheels",
+        rouletteWheelAbi as Abi,
+        "roulette",
+        backoff,
+        log,
+      )),
+    );
   }
   return out;
 }
@@ -52,40 +123,49 @@ async function main() {
   const {publicClient} = clients;
   const {walletClient, account} = requireWallet(clients);
 
-  const factory = cfg.addresses.factory;
-  if (!factory && !process.env.MACHINES) {
-    throw new Error("FACTORY_ADDRESS / deployments DegenRollFactory not set (or provide MACHINES)");
+  const degenFactory = cfg.addresses.factory;
+  const rouletteFactory = cfg.addresses.rouletteFactory;
+  if (!degenFactory && !rouletteFactory && !process.env.MACHINES) {
+    throw new Error(
+      "No factories set (DegenRollFactory / RouletteWheelFactory) and no MACHINES override",
+    );
   }
 
   const rpcBackoff = new Backoff({maxMs: cfg.maxBackoffMs});
-  log.info("restock keeper up", {factory, minFreeBps: MIN_FREE_BPS.toString()});
+  log.info("restock keeper up", {
+    degen: degenFactory ?? "(none)",
+    roulette: rouletteFactory ?? "(none)",
+    minFreeBps: MIN_FREE_BPS.toString(),
+  });
 
   await runLoop(cfg, log, async (ctx) => {
-    const machines = await discoverMachines(publicClient, factory as Address, rpcBackoff, log);
-    log.info("machines discovered", {count: machines.length});
+    const consumers = await discoverConsumers(publicClient, degenFactory, rouletteFactory, rpcBackoff, log);
+    log.info("consumers discovered", {count: consumers.length});
 
-    for (const addr of machines) {
+    for (const {addr, abi, kind} of consumers) {
       if (ctx.stopping()) break;
-      const m = getContract({address: addr, abi: degenRollAbi, client: publicClient});
+      const m: any = getContract({address: addr, abi, client: publicClient});
 
       const [ethFloat, free, reserved] = await Promise.all([
         attempt(() => m.read.ethFloat(), {retries: 3, backoff: rpcBackoff, log, label: "ethFloat"}),
         attempt(() => m.read.freeStock(), {retries: 3, backoff: rpcBackoff, log, label: "freeStock"}),
-        attempt(() => m.read.totalReserved(), {retries: 3, backoff: rpcBackoff, log, label: "totalReserved"}),
-      ]);
+        attempt(() => m.read.totalReserved(), {
+          retries: 3,
+          backoff: rpcBackoff,
+          log,
+          label: "totalReserved",
+        }),
+      ]) as [bigint, bigint, bigint];
 
-      // "Short" = free inventory below the headroom target vs open reserves.
-      // When there are no open reserves, any positive float is worth converting
-      // to grow the bankroll.
       const target = (reserved * MIN_FREE_BPS) / 10_000n;
       const short = reserved === 0n ? free === 0n : free < target;
 
       const decision = {
-        machine: addr,
+        kind,
+        consumer: addr,
         ethFloat: formatEther(ethFloat),
         freeStock: free.toString(),
         reserved: reserved.toString(),
-        target: target.toString(),
         short,
       };
 
@@ -98,25 +178,24 @@ async function main() {
         continue;
       }
 
-      log.info("restocking machine", decision);
+      log.info("restocking", decision);
       try {
         const {request} = await publicClient.simulateContract({
           address: addr,
-          abi: degenRollAbi,
+          abi,
           functionName: "restock",
           account,
         });
         const hash = await walletClient.writeContract(request);
-        log.info("restock sent", {machine: addr, tx: hash});
+        log.info("restock sent", {consumer: addr, tx: hash});
         const receipt = await publicClient.waitForTransactionReceipt({
           hash,
           confirmations: cfg.confirmations,
         });
-        log.info("restock landed", {machine: addr, tx: hash, status: receipt.status});
+        log.info("restock landed", {consumer: addr, tx: hash, status: receipt.status});
       } catch (err) {
-        // Float may have been restocked by another keeper, or oracle stale — skip.
         log.warn("restock reverted or lost race", {
-          machine: addr,
+          consumer: addr,
           error: err instanceof Error ? err.message : String(err),
         });
       }
