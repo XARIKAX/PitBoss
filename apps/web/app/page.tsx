@@ -25,6 +25,12 @@ const MODULES = [
     body: 'Ticket in, stock out. Floor 0.70x, ceiling 50x, RTP 90%. Every roll committed to entropy that does not exist yet.',
   },
   {
+    tag: 'NEW',
+    href: '/roulette',
+    title: 'Roulette',
+    body: 'A European single-zero wheel — bet ETH, win tokenized stock. One green zero, a clean 2.70% edge, paid to the Bosses.',
+  },
+  {
     tag: 'LIVE',
     href: '/certificates',
     title: 'Bearer Certificates',
@@ -62,6 +68,7 @@ const HOUSE_SOURCES = [
 const CHIPS = [
   { href: '/floor', label: 'The Floor', live: true },
   { href: '/pit', label: 'The Pit', live: true },
+  { href: '/roulette', label: 'Roulette', live: true },
   { href: '/certificates', label: 'Certificates', live: true },
   { href: '/launcher', label: 'Launcher', live: true },
   { href: '/locker', label: 'Locker', live: true },
@@ -109,7 +116,7 @@ export default function Home() {
               { l: 'House Book', v: '$2.41M', s: 'total accrued' },
               { l: 'Edge', v: '10%', s: 'RTP 90%' },
               { l: 'Bosses', v: '888', s: 'fixed supply' },
-              { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
+              { l: 'Last bell', v: '+18.2%', s: '$PITBOSS/ETH' },
             ].map((x) => (
               <div key={x.l} className="panel-raised px-4 py-3.5">
                 <p className="label">{x.l}</p>
