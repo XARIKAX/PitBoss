@@ -36,13 +36,21 @@ library Chains {
         return EntropyKind.ChainlinkVRF;
     }
 
-    /// @notice Fastest plausible block time per chain, in milliseconds. Consumed by
-    ///         MinerEntropyConductor to place the target block at/after `readyAt`
-    ///         while keeping its hash inside the 256-block window. [CONFIG]
+    /// @notice `block.number` advance rate per chain, in milliseconds. Consumed by
+    ///         MinerEntropyConductor to place the target block at/after `readyAt`.
+    ///         [CONFIG — VERIFY on the live chain before mainnet]
+    /// @dev    On Arbitrum/Orbit chains, `block.number` returns the *L1* block
+    ///         number (it syncs to L1 roughly every minute and averages ~12s per
+    ///         block), NOT the ~0.25s L2 block cadence. So the rate here must be the
+    ///         L1 cadence (~12s), and `blockhash(target)` indexes that L1-synced
+    ///         number — giving a generous 256-block (~51 min) observable window.
+    ///         Confirm Robinhood Chain's exact `block.number`/`blockhash` behavior
+    ///         (docs.robinhood.com/chain/differences-from-ethereum) before relying
+    ///         on it; if it exposes an L2 cadence instead, retune this value.
     function blockTimeMs(uint256 chainId) internal pure returns (uint256) {
-        if (chainId == ROBINHOOD_CHAIN_ID) return 250; // Arbitrum Orbit ~0.25s
-        if (chainId == ANVIL_CHAIN_ID) return 1000; // anvil default
-        return 2000; // conservative default
+        if (chainId == ROBINHOOD_CHAIN_ID) return 12_000; // L1-synced block.number (~12s)
+        if (chainId == ANVIL_CHAIN_ID) return 1_000; // anvil default
+        return 12_000; // Ethereum-L1 cadence default
     }
 
     function isPrimary(uint256 chainId) internal pure returns (bool) {

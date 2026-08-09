@@ -12,7 +12,8 @@ import {MinerEntropyConductor} from "../src/pit/entropy/MinerEntropyConductor.so
 ///         that the derived word is deterministic and verifiable.
 contract MinerEntropyConductorTest is Test {
     MinerEntropyConductor internal cond;
-    uint256 internal constant BT_MS = 250; // 0.25s blocks (Robinhood Chain)
+    // Robinhood Chain: block.number is L1-synced (~12s), so blockTimeMs = 12_000.
+    uint256 internal constant BT_MS = 12_000;
 
     function setUp() public {
         cond = new MinerEntropyConductor(BT_MS);
@@ -33,8 +34,8 @@ contract MinerEntropyConductorTest is Test {
         uint64 readyAt = _commit(id, 10 minutes);
 
         uint256 target = cond.targetBlockFor(address(this), id);
-        // commit + (600*1000/250) + 2 = commit + 2402
-        assertEq(target, 1_000_000 + 2402, "target tracks readyAt");
+        // commit + (600*1000/12000) + 2 = commit + 52
+        assertEq(target, 1_000_000 + 52, "target tracks readyAt");
 
         // Advance to one block past target; warp to readyAt.
         vm.roll(target + 1);
@@ -51,7 +52,8 @@ contract MinerEntropyConductorTest is Test {
         bytes32 id = keccak256("instant-1");
         uint64 readyAt = _commit(id, 30);
         uint256 target = cond.targetBlockFor(address(this), id);
-        assertEq(target, 1_000_000 + 120 + 2, "instant target");
+        // commit + (30*1000/12000 = 2) + 2 = commit + 4
+        assertEq(target, 1_000_000 + 4, "instant target");
 
         vm.roll(target + 1);
         vm.warp(readyAt + 1);

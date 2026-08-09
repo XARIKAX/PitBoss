@@ -20,18 +20,19 @@ import {Errors} from "../../lib/Errors.sol";
 ///         consumers behind a timelock, so a real VRF can replace it later with no
 ///         change to the games. Accepted for launch; see docs/PIT.md.
 ///
-///         FAST-L2 CORRECTNESS: `blockhash` only sees the last 256 blocks (~64s at
-///         0.25s blocks), but the consumer's Vault lane delays settlement up to 10
-///         minutes. A naive `target = commit + k` would age out long before
-///         `readyAt`, making the pull permanently unfulfillable. Instead the target
-///         block is chosen to land AT/AFTER `readyAt`:
+///         BLOCK-NUMBER SEMANTICS: on Arbitrum/Orbit chains (Robinhood Chain),
+///         `block.number` returns the *L1* block number (~12s cadence), not the
+///         ~0.25s L2 cadence, and `blockhash` indexes that L1-synced number — a
+///         256-block observable window of ~51 minutes. The target block is chosen
+///         to land AT/AFTER `readyAt`:
 ///             targetBlock = committedBlock + (delay / blockTime) + MIN_CONFIRMATIONS
-///         so its hash is still fresh when the keeper fulfills right after
-///         `readyAt`. `blockTimeMs` is set to the FASTEST plausible block time so
-///         the target lands at or slightly after `readyAt` (never before), keeping
-///         a full 256-block margin for the keeper. If the keeper still misses the
-///         window the hash reads zero and the consumer refunds the stake after its
-///         48h window — fail-closed, never a wrong payout.
+///         with `blockTimeMs` set to the chain's `block.number` advance rate
+///         (Chains.blockTimeMs — 12s for Robinhood). The Vault lane's 10-minute
+///         delay is well inside the ~51-minute window, so the keeper has ample time
+///         to fulfill. If it still misses, the hash reads zero and the consumer
+///         refunds the stake after its 48h window — fail-closed, never a wrong
+///         payout. [The exact block.number/blockhash behavior MUST be verified on
+///         Robinhood Chain before mainnet; retune blockTimeMs if it differs.]
 contract MinerEntropyConductor is EntropyConductorBase {
     /// @notice Assumed lower bound on block time, in milliseconds. Set per chain to
     ///         the fastest plausible block time. [CONFIG]

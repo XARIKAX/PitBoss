@@ -21,7 +21,7 @@ value in one place; the deploy script and frontend read from these.
 | Entropy backend (Base) | Chainlink VRF v2.5 (`VRFEntropyConductor`) | `Chains.entropyKind` |
 | Entropy stall window | **30 min** (fail-closed threshold) | `EntropyConductorBase.STALL_WINDOW` |
 | Blockhash target | `committedBlock + delay/blockTime + 2` (tracks `readyAt`) | `MinerEntropyConductor` |
-| Assumed block time (Robinhood) | **250 ms** (fastest-plausible; keeps hash in 256-block window) | `Chains.blockTimeMs` |
+| `block.number` rate (Robinhood) | **12 s** — `block.number` is L1-synced on Arbitrum/Orbit, **VERIFY on-chain** | `Chains.blockTimeMs` |
 
 ### The Floor
 | Config | Value used | Where |
@@ -234,6 +234,22 @@ lane on a ~0.25s chain.
   consumer's `settle()` within the 256-block window after each target block
   (`targetBlockFor(consumer, id)` tells it when). Miss it and that pull becomes
   refund-only after 48h.
+
+### Robinhood-Chain assumptions to VERIFY on-chain (compiles ≠ functional)
+The contracts are valid EVM and deploy on Robinhood Chain, but three integrations
+depend on live-chain behavior that must be confirmed on a testnet/fork before
+mainnet — they cannot be proven from the repo:
+1. **`block.number` / `blockhash`** — Arbitrum/Orbit make `block.number` L1-synced
+   (~12s). `Chains.blockTimeMs(4663)=12_000` reflects this, and `blockhash(target)`
+   must return a **non-zero, per-block** value inside the ~256-block window. Deploy
+   `MinerEntropyConductor` to a Robinhood testnet and confirm a commit→fulfill cycle
+   lands a non-zero word at the expected block; retune `blockTimeMs` if the cadence
+   differs. If `blockhash` is unusable, switch to an `ArbSys`-based scheme or a real
+   VRF.
+2. **Pyth** — confirm the Pyth contract is deployed and has USD price feeds for ETH
+   and each tokenized stock (feed ids) with acceptable staleness.
+3. **Uniswap V3** — confirm SwapRouter02 + WETH addresses and that each ETH↔stock
+   pool exists **with liquidity** at the chosen fee tier.
 
 ### Known follow-ups before mainnet
 - Wrap owner roles (fee-recipient / conductor migration) in a **3-day timelock**
