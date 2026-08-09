@@ -28,6 +28,16 @@ interface IWETH9 {
     function balanceOf(address owner) external view returns (uint256);
 }
 
+/// @dev Chainlink Data Feed — the oracle Robinhood Chain uses for ETH and every
+///      tokenized stock (share price × multiplier). Same interface for all feeds.
+interface AggregatorV3Interface {
+    function decimals() external view returns (uint8);
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+}
+
 /// @dev Uniswap V3 SwapRouter02 single-hop exact-input (no deadline arg).
 interface IUniV3Router {
     struct ExactInputSingleParams {

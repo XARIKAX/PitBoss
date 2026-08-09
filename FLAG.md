@@ -96,7 +96,7 @@ expects real oracle/router/stock addresses via env (`USE_MOCKS=false`).
 | Mock | Stands in for | Real replacement |
 |---|---|---|
 | `MockStockToken` | Tokenized stock (e.g. tokenized NVDA) | Real tokenized-stock address (live on Robinhood Chain) — config only |
-| `MockOracle` | Price feed (ETH/token, USD/token, USD/ETH) | ✅ **`PythOracleAdapter`** (`src/integrations/`) — Pyth-backed, ready |
+| `MockOracle` | Price feed (ETH/token, USD/token, USD/ETH) | ✅ **`ChainlinkOracleAdapter`** (`src/integrations/`) — Robinhood's real oracle (Chainlink Data Feeds, 8-dec; ETH/USD via UnstaleWrapper). `PythOracleAdapter` kept for Pyth chains. |
 | `MockSwapRouter` | DEX router (ETH→token at oracle mark) | ✅ **`UniV3RouterAdapter`** (`src/integrations/`) — Uniswap-V3-backed, ready |
 | `MockEntropyConductor` | Entropy source | ✅ **`MinerEntropyConductor`** (blockhash) — wired for Robinhood Chain |
 | `MockPoolDeployer` | Uniswap V3 pool + LP creation on graduation | **Launcher only** — the Locker takes the real V3 position manager as a call parameter, so it needs no adapter |
