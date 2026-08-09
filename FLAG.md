@@ -96,7 +96,7 @@ expects real oracle/router/stock addresses via env (`USE_MOCKS=false`).
 |---|---|---|
 | `MockStockToken` | Tokenized stock (e.g. tokenized NVDA) | Real tokenized-stock address (live on Robinhood Chain) — config only |
 | `MockOracle` | Price feed (ETH/token, USD/token, USD/ETH) | ✅ **`ChainlinkOracleAdapter`** (`src/integrations/`) — Robinhood's real oracle (Chainlink Data Feeds, 8-dec; ETH/USD via UnstaleWrapper). `PythOracleAdapter` kept for Pyth chains. |
-| `MockSwapRouter` | DEX router (ETH→token at oracle mark) | ✅ **`UniV3RouterAdapter`** (`src/integrations/`) — Uniswap-V3-backed, ready |
+| `MockSwapRouter` | DEX router (ETH→token at oracle mark) | ✅ **`UniV3RouterAdapter`** (`src/integrations/`) — Uniswap V3 **multi-hop** (`exactInput`): stocks have NO direct WETH pool, they route `WETH→USDG→stock`. Per-token route set via `setRouteVia(stock, USDG, 3000, 3000)`. A stock with no route (or no liquidity, e.g. SPCX) can't be a reward. |
 | `MockEntropyConductor` | Entropy source | ✅ **`MinerEntropyConductor`** (blockhash) — wired for Robinhood Chain |
 | `MockPoolDeployer` | Uniswap V3 pool + LP creation on graduation | **Launcher only** — the Locker takes the real V3 position manager as a call parameter, so it needs no adapter |
 | `VRFEntropyConductor` | Chainlink VRF v2.5 (chains with a coordinator, e.g. Base) | Wire `rawFulfillRandomWords` before Base mainnet; not used on Robinhood |

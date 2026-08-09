@@ -43,6 +43,8 @@ contract DeployIntegrations is Script {
         router = address(r);
         console2.log("ChainlinkOracleAdapter", oracle);
         console2.log("UniV3RouterAdapter", router);
-        console2.log("NEXT: owner.setTokenFeed(stock, chainlinkFeed) + owner.setFee(stock, tier) per stock");
+        console2.log("NEXT per stock: oracle.setTokenFeed(stock, chainlinkFeed)");
+        console2.log("  + router.setRouteVia(stock, USDG, 3000, 3000)  (WETH->USDG->stock; no direct pool)");
+        console2.log("  Only add stocks with PROVEN liquidity on that route.");
     }
 }

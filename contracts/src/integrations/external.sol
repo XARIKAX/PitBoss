@@ -38,20 +38,17 @@ interface AggregatorV3Interface {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
-/// @dev Uniswap V3 SwapRouter02 single-hop exact-input (no deadline arg).
+/// @dev Uniswap V3 SwapRouter02 multi-hop exact-input (no deadline arg). `path` is
+///      the V3-encoded route `abi.encodePacked(tokenIn, fee, [mid, fee, ...] tokenOut)`
+///      — needed because Robinhood stock tokens have no direct WETH pool and route
+///      WETH → USDG → stock.
 interface IUniV3Router {
-    struct ExactInputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint24 fee;
+    struct ExactInputParams {
+        bytes path;
         address recipient;
         uint256 amountIn;
         uint256 amountOutMinimum;
-        uint160 sqrtPriceLimitX96;
     }
 
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        payable
-        returns (uint256 amountOut);
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 }

@@ -46,17 +46,23 @@ contract MockWETH {
 
 contract MockV3Router is IUniV3Router {
     MockWETH public immutable weth;
+    address public tokenOut; // the token this mock mints (last hop of the path)
 
     constructor(address weth_) {
         weth = MockWETH(weth_);
     }
 
-    // 1:1 raw amountIn -> amountOut for the test; enforces amountOutMinimum.
-    function exactInputSingle(ExactInputSingleParams calldata p) external payable returns (uint256 amountOut) {
+    function setTokenOut(address t) external {
+        tokenOut = t;
+    }
+
+    // 1:1 raw amountIn -> amountOut for the test; enforces amountOutMinimum. The
+    // multi-hop path is ignored — the mock mints the preset output token.
+    function exactInput(ExactInputParams calldata p) external payable returns (uint256 amountOut) {
         weth.transferFrom(msg.sender, address(this), p.amountIn);
         amountOut = p.amountIn;
         require(amountOut >= p.amountOutMinimum, "min");
-        MockStockToken(p.tokenOut).mint(p.recipient, amountOut);
+        MockStockToken(tokenOut).mint(p.recipient, amountOut);
     }
 }
 
@@ -82,7 +88,10 @@ contract AdaptersTest is Test {
 
         weth = new MockWETH();
         v3 = new MockV3Router(address(weth));
+        v3.setTokenOut(address(stock));
         router = new UniV3RouterAdapter(address(v3), address(weth), address(oracle), owner);
+        // Route WETH -> USDG -> stock (the Robinhood shape); mid token is a stand-in.
+        router.setRouteVia(address(stock), makeAddr("USDG"), 3000, 3000);
 
         // ETH = $3000, AAPL = $224 (expo -8)
         pyth.set(ETH_FEED, 3000e8, -8, block.timestamp);
@@ -134,5 +143,13 @@ contract AdaptersTest is Test {
     function test_Router_MinOutEnforced() public {
         vm.expectRevert();
         router.swapExactETHForTokens{value: 1 ether}(address(stock), 1 ether + 1, makeAddr("to"));
+    }
+
+    /// @dev A token with no configured route can't be paid out (reverts) — matches
+    ///      an illiquid stock like SPCX with no pool.
+    function test_Router_NoRoute_Reverts() public {
+        MockStockToken other = new MockStockToken("Other", "OTH", 18);
+        vm.expectRevert();
+        router.swapExactETHForTokens{value: 1 ether}(address(other), 0, makeAddr("to"));
     }
 }

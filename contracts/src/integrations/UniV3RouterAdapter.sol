@@ -12,23 +12,26 @@ import {Errors} from "../lib/Errors.sol";
 ///         Consumers (House Book delivery, Degen Roll / Roulette restock) swap ETH
 ///         into a stock token with a caller-supplied `minOut`.
 ///
-/// @dev    `quoteETHForTokens` must be a `view` (the House Book calls it to size
-///         `minOut`), but Uniswap's Quoter is non-view. So the quote is taken from
-///         the trusted **oracle** price, and the caller applies its own slippage
-///         cap to derive `minOut`; the real V3 swap then enforces that `minOut`
-///         on-chain. This bounds execution to within the caller's slippage of the
-///         oracle mark — a stalled oracle reverts (fail-closed) rather than
-///         quoting a dead price. Fee tier is set per token by the owner (the
-///         timelock), defaulting to 0.3%.
+/// @dev    MULTI-HOP ROUTES: Robinhood stock tokens have **no direct WETH pool** —
+///         they route `WETH → USDG → stock` (both 0.3%). So each token has an
+///         owner-configured V3 `path` and the swap uses `exactInput` (multi-hop),
+///         not `exactInputSingle`. A token with no configured route reverts (it
+///         cannot be a reward/payout token until it has a proven pool + route).
+///
+///         `quoteETHForTokens` must be a `view` (the House Book calls it to size
+///         `minOut`), but Uniswap's Quoter is non-view — so the quote comes from the
+///         trusted **oracle** price and the caller applies its own slippage cap; the
+///         real V3 swap then enforces that `minOut` on-chain. A stalled oracle
+///         reverts (fail-closed) rather than quoting a dead price.
 contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
     IUniV3Router public immutable router;
     IWETH9 public immutable weth;
     IOracle public oracle;
-    uint24 public constant DEFAULT_FEE = 3000; // 0.3%
-    mapping(address => uint24) public feeOf; // token => pool fee tier (0 => default)
+    /// @notice token => V3-encoded route `WETH,fee,[mid,fee,]token`.
+    mapping(address => bytes) public routeOf;
 
     event OracleSet(address oracle);
-    event FeeSet(address indexed token, uint24 fee);
+    event RouteSet(address indexed token, bytes path);
 
     constructor(address router_, address weth_, address oracle_, address owner_) Ownable(owner_) {
         if (router_ == address(0) || weth_ == address(0) || oracle_ == address(0)) revert Errors.ZeroAddress();
@@ -44,20 +47,32 @@ contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
         emit OracleSet(oracle_);
     }
 
-    function setFee(address token, uint24 fee) external onlyOwner {
-        feeOf[token] = fee;
-        emit FeeSet(token, fee);
+    /// @notice Set a raw V3 path for `token` (advanced). Must start at WETH and end
+    ///         at `token`.
+    function setRoute(address token, bytes calldata path) external onlyOwner {
+        routeOf[token] = path;
+        emit RouteSet(token, path);
     }
 
-    function _fee(address token) internal view returns (uint24) {
-        uint24 f = feeOf[token];
-        return f == 0 ? DEFAULT_FEE : f;
+    /// @notice Convenience: a two-hop route `WETH -feeIn-> mid -feeOut-> token`
+    ///         (e.g. mid = USDG). This is the shape every Robinhood stock uses.
+    function setRouteVia(address token, address mid, uint24 feeIn, uint24 feeOut) external onlyOwner {
+        bytes memory path = abi.encodePacked(address(weth), feeIn, mid, feeOut, token);
+        routeOf[token] = path;
+        emit RouteSet(token, path);
+    }
+
+    /// @notice Convenience: a direct route `WETH -fee-> token` (only for a token that
+    ///         actually has a WETH pool).
+    function setRouteDirect(address token, uint24 fee) external onlyOwner {
+        bytes memory path = abi.encodePacked(address(weth), fee, token);
+        routeOf[token] = path;
+        emit RouteSet(token, path);
     }
 
     // -------- ISwapRouter --------
     /// @inheritdoc ISwapRouter
-    /// @dev Oracle-priced quote (view-safe). Actual execution enforces the caller's
-    ///      `minOut` on Uniswap.
+    /// @dev Oracle-priced quote (view-safe). Execution enforces the caller's `minOut`.
     function quoteETHForTokens(address tokenOut, uint256 ethIn) external view returns (uint256) {
         uint256 px = oracle.ethPerToken(tokenOut); // eth-wei per 1e18 token
         if (px == 0) return 0;
@@ -73,22 +88,20 @@ contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
     {
         uint256 amountIn = msg.value;
         if (amountIn == 0) revert Errors.ZeroAmount();
+        bytes memory path = routeOf[tokenOut];
+        if (path.length == 0) revert Errors.InvalidConfig(); // no route configured
 
         weth.deposit{value: amountIn}();
         weth.approve(address(router), amountIn);
 
-        amountOut = router.exactInputSingle(
-            IUniV3Router.ExactInputSingleParams({
-                tokenIn: address(weth),
-                tokenOut: tokenOut,
-                fee: _fee(tokenOut),
+        amountOut = router.exactInput(
+            IUniV3Router.ExactInputParams({
+                path: path,
                 recipient: to,
                 amountIn: amountIn,
-                amountOutMinimum: minOut,
-                sqrtPriceLimitX96: 0
+                amountOutMinimum: minOut
             })
         );
-        // Uniswap enforces amountOutMinimum, but re-check defensively.
-        if (amountOut < minOut) revert Errors.InsufficientPayment();
+        if (amountOut < minOut) revert Errors.InsufficientPayment(); // defensive
     }
 }
