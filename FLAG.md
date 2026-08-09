@@ -93,14 +93,21 @@ Replace all of these with real addresses in `Chains` config / deploy env before
 mainnet. On a real chain the deploy script wires the real entropy conductor and
 expects real oracle/router/stock addresses via env (`USE_MOCKS=false`).
 
-| Mock | Stands in for | File |
+| Mock | Stands in for | Real replacement |
 |---|---|---|
-| `MockStockToken` | Tokenized stock (e.g. tokenized NVDA) | `src/mocks/MockStockToken.sol` |
-| `MockOracle` | Price feed (ETH/token, USD/token, USD/ETH) | `src/mocks/MockOracle.sol` |
-| `MockSwapRouter` | DEX router (ETH→token at oracle mark) | `src/mocks/MockSwapRouter.sol` |
-| `MockEntropyConductor` | Entropy source (test-controllable words + health) | `src/mocks/MockEntropyConductor.sol` |
-| `MockPoolDeployer` | Uniswap V3 pool + LP creation on graduation, and V3 position manager for the Locker | `src/mocks/MockPoolDeployer.sol` |
-| `VRFEntropyConductor` | **Integration skeleton** — wire the real Chainlink VRF v2.5 client (request + `rawFulfillRandomWords`) before Base mainnet | `src/pit/entropy/VRFEntropyConductor.sol` |
+| `MockStockToken` | Tokenized stock (e.g. tokenized NVDA) | Real tokenized-stock address (live on Robinhood Chain) — config only |
+| `MockOracle` | Price feed (ETH/token, USD/token, USD/ETH) | ✅ **`PythOracleAdapter`** (`src/integrations/`) — Pyth-backed, ready |
+| `MockSwapRouter` | DEX router (ETH→token at oracle mark) | ✅ **`UniV3RouterAdapter`** (`src/integrations/`) — Uniswap-V3-backed, ready |
+| `MockEntropyConductor` | Entropy source | ✅ **`MinerEntropyConductor`** (blockhash) — wired for Robinhood Chain |
+| `MockPoolDeployer` | Uniswap V3 pool + LP creation on graduation | **Launcher only** — the Locker takes the real V3 position manager as a call parameter, so it needs no adapter |
+| `VRFEntropyConductor` | Chainlink VRF v2.5 (chains with a coordinator, e.g. Base) | Wire `rawFulfillRandomWords` before Base mainnet; not used on Robinhood |
+
+**Adapters (built, need real addresses at deploy):** `PythOracleAdapter` takes the
+Pyth contract + ETH/USD feed id + per-token feed ids; `UniV3RouterAdapter` takes the
+V3 SwapRouter02 + WETH + the oracle, with per-token fee tiers. Deploy via
+`script/DeployIntegrations.s.sol`, then point `HouseBook.setRouter` /
+`LoanVault.setConfig` / the machine wiring at them. Both assume 18-decimal stock
+(FLAG deviation #4).
 
 ---
 
