@@ -149,7 +149,7 @@ export default function Home() {
             <span className="inline-block h-px w-5 bg-lime/60" /> The Floor
           </p>
           <h2 className="headline text-h2">
-            Six desks. One pot. <span className="em">Every fee pays you.</span>
+            Seven desks. One pot. <span className="em">Every fee pays you.</span>
           </h2>
         </Reveal>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
