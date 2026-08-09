@@ -25,8 +25,10 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     IERC20 public immutable pit;
     IHouseBook public houseBook;
 
-    /// @notice Flat $PIT price per Boss. [CONFIG: 500,000]
-    uint256 public constant PRICE_PIT = 500_000 ether;
+    /// @notice Flat $PIT price per Boss. Settable so it can be tuned to the token's
+    ///         total supply — e.g. a launchpad ($PITBOSS on Pons) token whose supply
+    ///         differs from the reference 42M. [CONFIG: default 500,000]
+    uint256 public PRICE_PIT = 500_000 ether;
     /// @notice ETH fee to buy the next Boss. [CONFIG]
     uint256 public buyFee = 0.002 ether;
     /// @notice ETH fee to snipe a specific in-vault Boss (higher). [CONFIG]
@@ -43,6 +45,7 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     event Sniped(address indexed buyer, uint256 indexed tokenId, uint256 ethFee);
     event LiquidatorSet(address indexed who, bool allowed);
     event FeesSet(uint256 buyFee, uint256 snipeFee);
+    event PriceSet(uint256 price);
     event HouseBookSet(address houseBook);
 
     constructor(address boss_, address pit_, address houseBook_) Ownable(msg.sender) {
@@ -58,6 +61,13 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
         buyFee = buyFee_;
         snipeFee = snipeFee_;
         emit FeesSet(buyFee_, snipeFee_);
+    }
+
+    /// @notice Set the flat $PIT price per Boss (tune to the token supply).
+    function setPrice(uint256 price) external onlyOwner {
+        if (price == 0) revert Errors.InvalidConfig();
+        PRICE_PIT = price;
+        emit PriceSet(price);
     }
 
     function setHouseBook(address houseBook_) external onlyOwner {

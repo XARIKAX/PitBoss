@@ -95,7 +95,10 @@ contract Deploy is Script {
         a.poolDeployer = address(new MockPoolDeployer()); // replace with V3 adapter on mainnet
 
         // ---- token + collection ----
-        a.pit = address(new PIT(treasury));
+        // Protocol token: use the launchpad token ($PITBOSS on Pons) when its
+        // address is provided; otherwise deploy the reference PIT.sol (local/test).
+        a.pit = _envOr("PIT_TOKEN", address(0));
+        if (a.pit == address(0)) a.pit = address(new PIT(treasury));
         a.account = address(new PitBossAccount());
         a.registry = address(new InitializingRegistry(a.account));
         a.boss = address(new PitBoss(a.registry, royalty));

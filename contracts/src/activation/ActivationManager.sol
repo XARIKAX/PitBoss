@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {IPitBoss, IActivationManager} from "../interfaces/Support.sol";
 import {FloorPosition} from "../floor/FloorPosition.sol";
 import {Errors} from "../lib/Errors.sol";
@@ -20,7 +19,7 @@ contract ActivationManager is IActivationManager, Ownable {
     using SafeERC20 for IERC20;
 
     IPitBoss public immutable pitBoss;
-    ERC20Burnable public immutable pit;
+    IERC20 public immutable pit;
     FloorPosition public immutable floor;
     address public houseBook; // parks the non-burned $PIT share
 
@@ -28,6 +27,10 @@ contract ActivationManager is IActivationManager, Ownable {
     uint256 public activationFee = 500 ether;
     /// @notice FloorPosition score granted per epoch of continuous activation.
     uint256 public constant STREAK_POINTS_PER_EPOCH = 25;
+    /// @notice Burn sink. The protocol token ($PITBOSS on Pons) exposes no `burn()`,
+    ///         so "burning" is a transfer to the dead address — removes supply for
+    ///         any ERC-20, launchpad token included.
+    address internal constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     struct State {
         bool activated;
@@ -45,7 +48,7 @@ contract ActivationManager is IActivationManager, Ownable {
     constructor(address pitBoss_, address pit_, address floor_, address houseBook_) Ownable(msg.sender) {
         if (pitBoss_ == address(0) || pit_ == address(0) || floor_ == address(0)) revert Errors.ZeroAddress();
         pitBoss = IPitBoss(pitBoss_);
-        pit = ERC20Burnable(pit_);
+        pit = IERC20(pit_);
         floor = FloorPosition(floor_);
         houseBook = houseBook_;
     }
@@ -66,26 +69,33 @@ contract ActivationManager is IActivationManager, Ownable {
     // -------- activation --------
 
     /// @notice Activate a Boss. Caller must own it and have approved `activationFee`
-    ///         of $PIT. 50% is burned, 50% parked at the House Book.
+    ///         of $PIT. ~50% is burned (to the dead address), ~50% parked at the
+    ///         House Book.
+    /// @dev    Fee-on-transfer-safe: the protocol token may take a transfer tax, so
+    ///         the split is computed from the amount ACTUALLY received (balance
+    ///         diff), never the nominal fee — otherwise the two out-transfers would
+    ///         exceed the balance and revert.
     function activate(uint256 tokenId) external {
         if (pitBoss.ownerOf(tokenId) != msg.sender) revert Errors.NotOwner();
         State storage s = _state[tokenId];
         if (_isFresh(tokenId, s)) revert Errors.AlreadyActivated();
 
-        uint256 fee = activationFee;
-        uint256 burnShare = fee / 2;
-        uint256 bookShare = fee - burnShare;
-        // Pull full fee, burn half, park half.
-        IERC20(address(pit)).safeTransferFrom(msg.sender, address(this), fee);
-        pit.burn(burnShare);
-        IERC20(address(pit)).safeTransfer(houseBook, bookShare);
+        uint256 before = pit.balanceOf(address(this));
+        pit.safeTransferFrom(msg.sender, address(this), activationFee);
+        uint256 received = pit.balanceOf(address(this)) - before;
+        if (received == 0) revert Errors.ZeroAmount();
+
+        uint256 burnShare = received / 2;
+        uint256 bookShare = received - burnShare;
+        pit.safeTransfer(DEAD, burnShare); // dead-address "burn"
+        pit.safeTransfer(houseBook, bookShare); // parked as $PIT at the book
 
         s.activated = true;
         s.epochAtActivation = pitBoss.transferEpoch(tokenId);
         s.lastStreakPoke = uint64(block.timestamp);
 
         floor.activate(tokenId);
-        emit Activated(tokenId, msg.sender, fee);
+        emit Activated(tokenId, msg.sender, received);
     }
 
     /// @notice Convert elapsed active epochs into FloorPosition score. Permissionless

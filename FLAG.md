@@ -26,12 +26,12 @@ value in one place; the deploy script and frontend read from these.
 ### The Floor
 | Config | Value used | Where |
 |---|---|---|
-| `$PIT` total supply | **42,000,000** × 1e18 (fixed, no mint) | `PIT.INITIAL_SUPPLY` |
+| Protocol token | **$PITBOSS, launched on Pons** (external, taxed) — address via `PIT_TOKEN` env; `PIT.sol` (42M) is the local/test reference only | `Deploy.s.sol` |
 | PitBoss max supply | **888** | `PitBoss.MAX_SUPPLY` |
-| AMM flat price | **500,000 $PIT** per Boss | `FlatAMMVault.PRICE_PIT` |
+| AMM flat price | **settable** (default 500,000) — tune to the token supply | `FlatAMMVault.PRICE_PIT` / `setPrice` |
 | AMM buy fee (next) | **0.002 ETH** | `FlatAMMVault.buyFee` |
 | AMM snipe fee (specific id) | **0.006 ETH** | `FlatAMMVault.snipeFee` |
-| Activation fee | **500 $PIT** (50% burned / 50% parked at House Book) | `ActivationManager.activationFee` |
+| Activation fee | **500 $PIT** default (settable) — ~50% dead-burned / ~50% parked at House Book, on the amount *received* | `ActivationManager.activationFee` |
 | Floor epoch | **1 day** | `FloorPosition.EPOCH` |
 | Front-row cap | **3.33×** base weight | `FloorPosition.FRONT_ROW_CAP_BPS` (33,300) |
 | Score → cap saturation | 10,000 | `FloorPosition.SCORE_FOR_CAP` |
@@ -149,6 +149,22 @@ V3 SwapRouter02 + WETH + the oracle, with per-token fee tiers. Deploy via
 10. **Graduation pool creation** uses `MockPoolDeployer`; a real Uniswap V3 adapter
     implementing `IPoolDeployer` + `INonfungiblePositionManager` is required for
     mainnet.
+12. **Protocol token is an external, taxed launchpad token ($PITBOSS on Pons).** The
+    protocol does not deploy its token on mainnet — it points at the Pons token via
+    the `PIT_TOKEN` env var (`PIT.sol` remains the local/test reference). Because a
+    launchpad token carries a 1–2% transfer tax and exposes no `burn()`, three
+    changes make the Floor safe with it: (a) **dead-address burn** in Activation
+    (transfer to `0x…dEaD`, works for any ERC-20); (b) **fee-on-transfer-safe**
+    accounting — Activation splits the amount *actually received* (balance diff), not
+    the nominal fee, so the two out-transfers can't exceed the taxed-down balance and
+    revert (tested in `test/FeeOnTransfer.t.sol`); (c) **settable `PRICE_PIT`** so the
+    Boss price tunes to the token's supply. The Pit games (Degen Roll, Roulette,
+    Certificates) run on ETH + stock and never touch the token, so the tax does not
+    affect them. **Accepted cost:** the tax nicks value on every internal token move
+    (activation burn, loan repay) and makes Loans economically lossy for the
+    borrower — inherent to a taxed token, safe but not free. **Audit note:** re-scope
+    every $PITBOSS path (AMM buy, Activation, LoanVault borrow/repay) against a
+    fee-on-transfer token.
 11. **RouletteWheel** (`src/pit/RouletteWheel.sol`) is a second Pit game built on the
     exact bankroll / entropy / settlement machinery of `DegenRoll`, so it inherits
     the reserve invariant, fail-closed behavior, 48h refund, and dead-shares guard.
