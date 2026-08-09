@@ -141,6 +141,17 @@ expects real oracle/router/stock addresses via env (`USE_MOCKS=false`).
 10. **Graduation pool creation** uses `MockPoolDeployer`; a real Uniswap V3 adapter
     implementing `IPoolDeployer` + `INonfungiblePositionManager` is required for
     mainnet.
+11. **RouletteWheel** (`src/pit/RouletteWheel.sol`) is a second Pit game built on the
+    exact bankroll / entropy / settlement machinery of `DegenRoll`, so it inherits
+    the reserve invariant, fail-closed behavior, 48h refund, and dead-shares guard.
+    European single-zero wheel (`Roulette.sol`, pure + verifiable, pocket = word%37);
+    **one bet per spin in v1** so the reserve is a single bet's worst-case payout
+    (multi-bet boards are a v2 extension). Payouts are total-return milli-x (straight
+    36×, dozen/column 3×, even-money 2×); the single zero gives a uniform 2.70%
+    structural edge to the bankroll, plus a 2% rake split 0.5/0.5/1 creator/book/
+    protocol. House Book fee is tagged `PitEdge` (roulette is a Pit game) to avoid an
+    enum change. **Audit-scoped the same as DegenRoll**; shares the same real-entropy
+    requirement (no live randomness wired yet — see §entropy follow-up).
 
 ---
 
