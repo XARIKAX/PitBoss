@@ -31,8 +31,8 @@ FLAG.md        End-of-build config report + auditor scoping (read this)
 
 | Module | What it does |
 |---|---|
-| **The Floor** | PitBoss NFT collection (ERC-6551 TBAs), `$PIT`, Flat AMM Vault, Activation, dynamic Floor Position tiers |
-| **The Pit** | Certificate Counter + Bearer Certificates (on-chain SVG), Degen Roll machines with **player-owned bankroll** |
+| **The Floor** | PitBoss NFT collection (ERC-6551 TBAs), `$PITBOSS`, Flat AMM Vault, Activation, dynamic Floor Position tiers |
+| **The Pit** | Certificate Counter + Bearer Certificates (on-chain SVG), **Degen Roll** machines + **Roulette** wheels — both with a **player-owned bankroll** |
 | **House Book** | Single fee sink; anyone cranks; pays every Boss pro rata by floor position |
 | **The Launcher / Opening Bell** | Token launches whose curve fees charge a public buyback bar |
 | **Locker / Loans** | Liquidity locking (hard/vest/permanent) and borrowing the flat AMM price against a Boss |
