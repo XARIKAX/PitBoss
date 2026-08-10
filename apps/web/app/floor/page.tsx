@@ -508,13 +508,31 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between">
-        <p className="headline text-lg">Boss #{id.toString()}</p>
-        {d?.activated == null ? null : d.activated ? (
-          <span className="chip chip-lime bg-lime/5">active</span>
-        ) : (
-          <span className="chip">dormant</span>
-        )}
+      <div className="flex items-center gap-4">
+        {/* Portrait — the real art for this token id, served from /bosses. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/bosses/${id.toString()}.png`}
+          alt={`PitBoss #${id.toString()}`}
+          width={72}
+          height={72}
+          className={`h-[72px] w-[72px] shrink-0 rounded-[10px] border [image-rendering:pixelated] ${
+            d?.activated
+              ? 'border-lime/50 shadow-[0_0_24px_-6px_rgba(198,255,0,0.45)]'
+              : 'border-line opacity-90'
+          }`}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between">
+            <p className="headline text-lg">Boss #{id.toString()}</p>
+            {d?.activated == null ? null : d.activated ? (
+              <span className="chip chip-lime bg-lime/5">active</span>
+            ) : (
+              <span className="chip">dormant</span>
+            )}
+          </div>
+          <p className="label mt-1">{d?.activated ? 'On the payroll' : 'Activate to start earning'}</p>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
