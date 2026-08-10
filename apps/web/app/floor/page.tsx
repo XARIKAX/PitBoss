@@ -137,12 +137,13 @@ function FreeMintCard() {
   });
 
   const batch = maxPerWallet.data != null;
-  const walletMax = batch
-    ? Number(remaining.data ?? maxPerWallet.data ?? 1n)
-    : 1;
+  // Selector is always 1–10. On the batch pass the wallet's remaining
+  // allowance caps it; on the legacy pass we mint sequentially (1 tx each).
+  const walletMax = batch ? Number(remaining.data ?? maxPerWallet.data ?? 10n) : 10;
   const maxQty = Math.max(1, Math.min(10, walletMax));
   const qtyClamped = Math.min(qty, maxQty);
   const walletTapped = batch && remaining.data != null && remaining.data === 0n;
+  const [progress, setProgress] = useState<string | null>(null);
 
   const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
   const paused = open.data === false;
@@ -152,19 +153,38 @@ function FreeMintCard() {
       : 0;
 
   async function onMint() {
-    await send(
-      batch && qtyClamped > 1
-        ? {
+    try {
+      if (batch && qtyClamped > 1) {
+        // Upgraded pass: the whole batch in one transaction.
+        await send(
+          {
             address: c.freeMintPass.address,
             abi: c.freeMintPass.abi,
             functionName: 'mint',
             args: [BigInt(qtyClamped)],
-          }
-        : { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
-      { title: qtyClamped > 1 ? `Mint ${qtyClamped} Bosses` : 'Mint your Boss' },
-    );
-    minted.refetch?.();
-    remaining.refetch?.();
+          },
+          { title: `Mint ${qtyClamped} Bosses` },
+        );
+      } else if (qtyClamped > 1) {
+        // Legacy single-mint pass: sequential mints, one confirmation each.
+        for (let i = 1; i <= qtyClamped; i++) {
+          setProgress(`Minting ${i} of ${qtyClamped}…`);
+          await send(
+            { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+            { title: `Mint Boss ${i} of ${qtyClamped}` },
+          );
+        }
+      } else {
+        await send(
+          { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+          { title: 'Mint your Boss' },
+        );
+      }
+    } finally {
+      setProgress(null);
+      minted.refetch?.();
+      remaining.refetch?.();
+    }
   }
 
   return (
@@ -231,34 +251,46 @@ function FreeMintCard() {
 
         {/* ── Right: THE button ── */}
         <div className="flex flex-col items-stretch gap-3">
-          {/* quantity stepper — unlocks to 10 on the batch-capable pass */}
-          {batch && !soldOut && !paused ? (
-            <div className="flex items-center justify-between rounded-[12px] border border-line bg-black/30 px-3 py-2">
-              <button
-                onClick={() => setQty((q) => Math.max(1, Math.min(q, maxQty) - 1))}
-                disabled={qtyClamped <= 1 || busy}
-                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
-                aria-label="Fewer"
-              >
-                −
-              </button>
-              <div className="text-center">
-                <p className="num font-mono text-[26px] font-bold leading-none text-lime">
-                  {qtyClamped}
-                </p>
-                <p className="label mt-0.5">
-                  {walletTapped ? 'wallet limit reached' : `of ${maxQty} available to you`}
-                </p>
+          {/* quantity selector — always 1–10, pack style */}
+          {!soldOut && !paused ? (
+            <>
+              <div className="flex items-center justify-between rounded-[12px] border border-line bg-black/30 px-4 py-3">
+                <div>
+                  <p className="font-mono text-[13.5px] font-semibold uppercase tracking-wide text-paper">
+                    PitBoss
+                  </p>
+                  <p className="label mt-0.5">FREE · gas only · max 10</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setQty((q) => Math.max(1, Math.min(q, maxQty) - 1))}
+                    disabled={qtyClamped <= 1 || busy}
+                    className="grid h-10 w-10 place-items-center rounded-[10px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                    aria-label="Fewer"
+                  >
+                    −
+                  </button>
+                  <p className="num w-8 text-center font-mono text-[26px] font-bold leading-none text-lime">
+                    {qtyClamped}
+                  </p>
+                  <button
+                    onClick={() => setQty((q) => Math.min(maxQty, Math.min(q, maxQty) + 1))}
+                    disabled={qtyClamped >= maxQty || busy}
+                    className="grid h-10 w-10 place-items-center rounded-[10px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                    aria-label="More"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => setQty((q) => Math.min(maxQty, Math.min(q, maxQty) + 1))}
-                disabled={qtyClamped >= maxQty || busy}
-                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
-                aria-label="More"
-              >
-                +
-              </button>
-            </div>
+              <div className="flex items-center justify-between px-1">
+                <p className="label">
+                  Total · {qtyClamped} {qtyClamped === 1 ? 'Boss' : 'Bosses'}
+                  {batch && remaining.data != null ? ` · ${Number(remaining.data)} left for this wallet` : ''}
+                </p>
+                <p className="num font-mono text-[15px] font-semibold text-lime">FREE</p>
+              </div>
+            </>
           ) : null}
           <button
             onClick={onMint}
@@ -276,10 +308,10 @@ function FreeMintCard() {
               className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.05)_0px,rgba(0,0,0,0.05)_1px,transparent_1px,transparent_3px)]"
             />
             <span className="relative flex items-center justify-center gap-3">
-              {busy ? (
+              {busy || progress ? (
                 <>
                   <span className="h-2 w-2 animate-dot rounded-full bg-black" />
-                  Minting…
+                  {progress ?? 'Minting…'}
                 </>
               ) : !isConnected ? (
                 'Connect to mint'
@@ -300,7 +332,7 @@ function FreeMintCard() {
           <p className="label text-center">
             {batch
               ? 'Up to 10 per wallet, one transaction · NFT + its own wallet · no allowlist, no cost'
-              : 'One transaction · NFT + its own wallet · no allowlist, no token, no cost'}
+              : 'Up to 10 per order · one confirmation per Boss until the batch upgrade · no allowlist, no cost'}
           </p>
         </div>
       </div>
