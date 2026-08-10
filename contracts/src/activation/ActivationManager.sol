@@ -23,8 +23,10 @@ contract ActivationManager is IActivationManager, Ownable {
     FloorPosition public immutable floor;
     address public houseBook; // parks the non-burned $PIT share
 
-    /// @notice Activation fee in $PIT. [CONFIG]
-    uint256 public activationFee = 500 ether;
+    /// @notice Activation fee in $PIT. Half burns to DEAD, half parks in the
+    ///         House Book — 888,888 per activation = 444,444 burned forever.
+    ///         [CONFIG: 888,888 $PITBOSS]
+    uint256 public activationFee = 888_888 ether;
     /// @notice FloorPosition score granted per epoch of continuous activation.
     uint256 public constant STREAK_POINTS_PER_EPOCH = 25;
     /// @notice Burn sink. The protocol token ($PITBOSS on Pons) exposes no `burn()`,

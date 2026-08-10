@@ -267,14 +267,16 @@ export function DocsBook() {
             wallet. Sell the Boss and the wallet, with everything in it, goes to the buyer.
           </P>
           <P>
-            Bosses trade on a <B>flat-price AMM</B>: a fixed price in $PITBOSS plus a small ETH
-            fee, with two doors — <L>buy next</L> takes whatever's up, <L>snipe</L> pays a higher
-            fee to pull a specific Boss out of inventory. No bonding curve on the collection, no
-            price discovery games: the scarcity is the 888 cap, not the chart.
+            <B>Minting is free.</B> A Boss costs no tokens — only a small ETH fee that goes
+            straight to the House Book, so every mint already pays the floor. Two doors:{' '}
+            <L>buy next</L> takes whatever's up, <L>snipe</L> pays a higher fee to pull a
+            specific Boss out of vault inventory. No bonding curve on the collection, no price
+            discovery games: the scarcity is the 888 cap, not the chart.
           </P>
           <P>
-            A fresh Boss earns nothing. <B>Activation</B> costs $PITBOSS — half is burned forever,
-            half goes to the House Book — and switches the Boss onto the floor: it accrues weight,
+            A fresh Boss earns nothing. <B>Activation</B> costs <B>888,888 $PITBOSS</B> —
+            444,444 burned forever, 444,444 to the House Book — and switches the Boss onto the
+            floor: it accrues weight,
             builds streaks the longer it stays active, and starts collecting from every crank.
             Transferring a Boss clears activation; the new owner pays to switch it back on. You
             choose what you're paid in: <B>elect any listed stock</B> and the book delivers that,
@@ -435,7 +437,8 @@ export function DocsBook() {
             the NFT and hands you the <B>full flat principal in $PITBOSS</B> — the same amount for
             every Boss, no appraisal, no oracle games. You pick the term (3–90 days) and pay the
             interest up front in ETH: <B>15% APR pro-rated to the term</B>, so a 30-day loan costs
-            a little over 1%.
+            a little over 1%. The desk opens once a flat principal is configured for the
+            collection (mint itself is free).
           </P>
           <P>
             Repay the exact principal and the Boss comes home. Run late and a 30% APR late fee
