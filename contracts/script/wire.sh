@@ -2,7 +2,11 @@
 # Post-deploy wiring script for PitBoss on Robinhood Chain (chainId 4663).
 # Run from the contracts/ directory:
 #   cd contracts && bash script/wire.sh
-# Requirements: cast (Foundry ≥ 0.2), jq
+#
+# To skip steps already completed, set RESUME_FROM:
+#   RESUME_FROM=6 bash script/wire.sh    # skip steps 1-5, start at step 6
+#
+# Requirements: cast (Foundry ≥ 0.2), python3
 
 set -euo pipefail
 
@@ -16,6 +20,8 @@ fi
 : "${PRIVATE_KEY:?PRIVATE_KEY not set — add it to .env}"
 
 SEND=(cast send --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY")
+STEP=1
+RESUME_FROM=${RESUME_FROM:-1}
 
 # ── Deployed contracts (from deployments/deployments.4663.json) ──────────────
 ORACLE=0x0B6CdED92c881B2e879d8105a2b9236f3121289B         # ChainlinkOracleAdapter
@@ -39,88 +45,119 @@ DEPLOYER=0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659
 MIN_LOAN_FEE=6000000000000000  # 0.006 ETH
 
 # ── Stocks with proven liquidity ──────────────────────────────────────────────
-# Format per entry: "token_address:feed_address:symbol"
+# Format: "token_address:feed_address:symbol"
 STOCKS=(
   "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC:0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15:NVDA"
   "0x322F0929c4625eD5bAd873c95208D54E1c003b2d:0x4A1166a659A55625345e9515b32adECea5547C38:TSLA"
   "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9:0x6B22A786bAa607d76728168703a39Ea9C99f2cD0:AAPL"
 )
 
-# ── Helper: decode address from a 32-byte indexed event topic ─────────────────
-# Topic format: 0x + 24 zero hex chars (12 byte padding) + 40-char address
-topic_to_addr() { echo "0x${1:26}"; }
+# ── Helper: extract address from cast --json receipt using python3 ─────────────
+# $1 = receipt JSON string, $2 = emitting contract address (any case)
+event_addr() {
+  local receipt="$1" contract="$2"
+  echo "$receipt" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+fac = '${2}'.lower()
+logs = [l for l in data.get('logs', []) if l['address'].lower() == fac]
+topic = logs[0]['topics'][2]
+print('0x' + topic[26:])
+"
+}
+
+# ── Step guard: skip if before RESUME_FROM ────────────────────────────────────
+step() { [[ $STEP -ge $RESUME_FROM ]]; }
+next() { STEP=$((STEP + 1)); }
 
 # ────────────────────────────────────────────────────────────────────────────
-echo "=== 1. Oracle: set Chainlink token feeds ==="
-for entry in "${STOCKS[@]}"; do
-  STOCK="${entry%%:*}"; rest="${entry#*:}"; FEED="${rest%%:*}"; SYM="${rest##*:}"
-  echo "  setTokenFeed $SYM ($STOCK)"
-  "${SEND[@]}" "$ORACLE" "setTokenFeed(address,address)" "$STOCK" "$FEED"
-done
+if step; then
+  echo "=== 1. Oracle: set Chainlink token feeds ==="
+  for entry in "${STOCKS[@]}"; do
+    STOCK="${entry%%:*}"; rest="${entry#*:}"; FEED="${rest%%:*}"; SYM="${rest##*:}"
+    echo "  setTokenFeed $SYM"
+    "${SEND[@]}" "$ORACLE" "setTokenFeed(address,address)" "$STOCK" "$FEED"
+  done
+else echo "--- skipping step 1 (RESUME_FROM=$RESUME_FROM)"; fi
+next
 
-echo ""
-echo "=== 2. SwapRouter: set WETH→USDG→stock routes (0.3% / 0.3%) ==="
-for entry in "${STOCKS[@]}"; do
-  STOCK="${entry%%:*}"; SYM="${entry##*:}"
-  echo "  setRouteVia $SYM"
-  "${SEND[@]}" "$SWAP_ROUTER" "setRouteVia(address,address,uint24,uint24)" \
-    "$STOCK" "$USDG" 3000 3000
-done
+if step; then
+  echo ""
+  echo "=== 2. SwapRouter: set WETH→USDG→stock routes (0.3% / 0.3%) ==="
+  for entry in "${STOCKS[@]}"; do
+    STOCK="${entry%%:*}"; SYM="${entry##*:}"
+    echo "  setRouteVia $SYM"
+    "${SEND[@]}" "$SWAP_ROUTER" "setRouteVia(address,address,uint24,uint24)" \
+      "$STOCK" "$USDG" 3000 3000
+  done
+else echo "--- skipping step 2"; fi
+next
 
-echo ""
-echo "=== 3. CertificateCounter: allow routed stocks ==="
-for entry in "${STOCKS[@]}"; do
-  STOCK="${entry%%:*}"; SYM="${entry##*:}"
-  echo "  setRouted $SYM"
-  "${SEND[@]}" "$COUNTER" "setRouted(address,bool)" "$STOCK" true
-done
+if step; then
+  echo ""
+  echo "=== 3. CertificateCounter: allow routed stocks ==="
+  for entry in "${STOCKS[@]}"; do
+    STOCK="${entry%%:*}"; SYM="${entry##*:}"
+    echo "  setRouted $SYM"
+    "${SEND[@]}" "$COUNTER" "setRouted(address,bool)" "$STOCK" true
+  done
+else echo "--- skipping step 3"; fi
+next
 
-echo ""
-echo "=== 4. HouseBook: set swap router ==="
-"${SEND[@]}" "$HOUSE_BOOK" "setRouter(address)" "$SWAP_ROUTER"
+if step; then
+  echo ""
+  echo "=== 4. HouseBook: set swap router ==="
+  "${SEND[@]}" "$HOUSE_BOOK" "setRouter(address)" "$SWAP_ROUTER"
+else echo "--- skipping step 4"; fi
+next
 
-echo ""
-echo "=== 5. LoanVault: set config ==="
-"${SEND[@]}" "$LOAN_VAULT" "setConfig(address,address,address,uint256)" \
-  "$HOUSE_BOOK" "$ORACLE" "$PROTOCOL_RESERVE" "$MIN_LOAN_FEE"
+if step; then
+  echo ""
+  echo "=== 5. LoanVault: set config ==="
+  "${SEND[@]}" "$LOAN_VAULT" "setConfig(address,address,address,uint256)" \
+    "$HOUSE_BOOK" "$ORACLE" "$PROTOCOL_RESERVE" "$MIN_LOAN_FEE"
+else echo "--- skipping step 5"; fi
+next
 
-echo ""
-echo "=== 6. DegenRoll: create machines + register as issuer/bumper ==="
-for entry in "${STOCKS[@]}"; do
-  STOCK="${entry%%:*}"; SYM="${entry##*:}"
-  echo "  createMachine $SYM"
-  TX_JSON=$("${SEND[@]}" "$ROLL_FACTORY" "createMachine(address,address)" \
-    "$STOCK" "$DEPLOYER" --json)
-  # MachineCreated(address indexed stock, address indexed machine, address indexed creator)
-  FAC_LC=$(echo "$ROLL_FACTORY" | tr '[:upper:]' '[:lower:]')
-  MACHINE_TOPIC=$(echo "$TX_JSON" | jq -r --arg fac "$FAC_LC" \
-    '[.logs[] | select((.address | ascii_downcase) == $fac)][0].topics[2]')
-  MACHINE=$(topic_to_addr "$MACHINE_TOPIC")
-  echo "    $SYM machine deployed: $MACHINE"
-  "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$MACHINE" true
-  "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$MACHINE" true
-done
+if step; then
+  echo ""
+  echo "=== 6. DegenRoll: create machines + register as issuer/bumper ==="
+  for entry in "${STOCKS[@]}"; do
+    STOCK="${entry%%:*}"; SYM="${entry##*:}"
+    echo "  createMachine $SYM"
+    # MachineCreated(address indexed stock, address indexed machine, address indexed creator)
+    TX_JSON=$("${SEND[@]}" "$ROLL_FACTORY" "createMachine(address,address)" \
+      "$STOCK" "$DEPLOYER" --json)
+    MACHINE=$(event_addr "$TX_JSON" "$ROLL_FACTORY")
+    echo "    $SYM machine: $MACHINE"
+    "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$MACHINE" true
+    "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$MACHINE" true
+  done
+else echo "--- skipping step 6"; fi
+next
 
-echo ""
-echo "=== 7. RouletteWheel: create wheels + register as issuer/bumper ==="
-for entry in "${STOCKS[@]}"; do
-  STOCK="${entry%%:*}"; SYM="${entry##*:}"
-  echo "  createWheel $SYM"
-  TX_JSON=$("${SEND[@]}" "$ROULETTE_FACTORY" "createWheel(address,address)" \
-    "$STOCK" "$DEPLOYER" --json)
-  # WheelCreated(address indexed stock, address indexed wheel, address indexed creator)
-  FAC_LC=$(echo "$ROULETTE_FACTORY" | tr '[:upper:]' '[:lower:]')
-  WHEEL_TOPIC=$(echo "$TX_JSON" | jq -r --arg fac "$FAC_LC" \
-    '[.logs[] | select((.address | ascii_downcase) == $fac)][0].topics[2]')
-  WHEEL=$(topic_to_addr "$WHEEL_TOPIC")
-  echo "    $SYM wheel deployed: $WHEEL"
-  "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$WHEEL" true
-  "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$WHEEL" true
-done
+if step; then
+  echo ""
+  echo "=== 7. RouletteWheel: create wheels + register as issuer/bumper ==="
+  for entry in "${STOCKS[@]}"; do
+    STOCK="${entry%%:*}"; SYM="${entry##*:}"
+    echo "  createWheel $SYM"
+    # WheelCreated(address indexed stock, address indexed wheel, address indexed creator)
+    TX_JSON=$("${SEND[@]}" "$ROULETTE_FACTORY" "createWheel(address,address)" \
+      "$STOCK" "$DEPLOYER" --json)
+    WHEEL=$(event_addr "$TX_JSON" "$ROULETTE_FACTORY")
+    echo "    $SYM wheel: $WHEEL"
+    "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$WHEEL" true
+    "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$WHEEL" true
+  done
+else echo "--- skipping step 7"; fi
+next
 
-echo ""
-echo "=== 8. VRFServiceConductor: fund with ETH for per-request fees ==="
-"${SEND[@]}" "$VRF_CONDUCTOR" --value 0.1ether
+if step; then
+  echo ""
+  echo "=== 8. VRFServiceConductor: fund with ETH for per-request fees ==="
+  "${SEND[@]}" "$VRF_CONDUCTOR" --value 0.1ether
+else echo "--- skipping step 8"; fi
 
 echo ""
 echo "════════════════════════════════════════════════════════════"
@@ -136,7 +173,7 @@ echo "    cast send $AMM 'setPIT(address)' \$PIT --rpc-url \$RPC_URL --private-k
 echo "    cast send $ACTIVATION 'setPIT(address)' \$PIT --rpc-url \$RPC_URL --private-key \$PRIVATE_KEY"
 echo "    cast send $LOAN_VAULT 'setPIT(address)' \$PIT --rpc-url \$RPC_URL --private-key \$PRIVATE_KEY"
 echo "    cast send \$PIT 'transfer(address,uint256)' $AMM <amount_wei> --rpc-url \$RPC_URL --private-key \$PRIVATE_KEY"
-echo "    # Then set price + fee: amm.setPrice(<pit_per_eth>)  activation.setActivationFee(<tokens>)"
+echo "    # Then: amm.setPrice(<pit_per_eth>)  activation.setActivationFee(<tokens>)"
 echo ""
 echo " c) NFT art:"
 echo "    cast send 0xaFC1acC4a5ABf7C317eE8D3D212C9c9331C9cc6E 'setBaseURI(string)' <ipfs_base_uri> \\"
