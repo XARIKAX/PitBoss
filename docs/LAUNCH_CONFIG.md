@@ -70,7 +70,9 @@ cd contracts
 
 # Step 1 — adapters (Chainlink oracle, Uni V3 router, V3 pool deployer)
 forge script script/DeployIntegrations.s.sol \
-  --rpc-url $RPC_URL --broadcast --verify
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast \
+  --verifier blockscout \
+  --verifier-url https://robinhoodchain.blockscout.com/api/
 
 # The script prints three addresses.  Add them to .env:
 #   ORACLE=<ChainlinkOracleAdapter>
@@ -79,7 +81,9 @@ forge script script/DeployIntegrations.s.sol \
 
 # Step 2 — full platform (PIT omitted; deploys with pit=address(0))
 forge script script/Deploy.s.sol \
-  --rpc-url $RPC_URL --broadcast --verify
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast \
+  --verifier blockscout \
+  --verifier-url https://robinhoodchain.blockscout.com/api/
 # Writes deployments/deployments.4663.json consumed by the web app.
 ```
 
