@@ -4,8 +4,24 @@ pragma solidity ^0.8.24;
 /// @title External integration interfaces
 /// @notice Minimal surfaces of the third-party contracts the mainnet adapters
 ///         talk to: Chainlink price feeds, Uniswap V3 (SwapRouter02, factory,
-///         position manager) and WETH9. Kept local so the repo has no heavy
-///         external dependency; the ABIs match the canonical deployments.
+///         position manager), WETH9, and Pyth (kept for non-Robinhood chains /
+///         the PythOracleAdapter). Kept local so the repo has no heavy external
+///         dependency; the ABIs match the canonical deployments.
+
+/// @dev Pyth price object (mirror of PythStructs.Price).
+library PythStructs {
+    struct Price {
+        int64 price; // scaled by 10^expo
+        uint64 conf;
+        int32 expo;
+        uint256 publishTime;
+    }
+}
+
+interface IPyth {
+    /// @notice Latest price for `id`, reverting if older than `age` seconds.
+    function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (PythStructs.Price memory);
+}
 
 interface IWETH9 {
     function deposit() external payable;

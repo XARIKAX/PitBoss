@@ -132,9 +132,32 @@ cast send $LOAN_VAULT "setConfig(address,address,address,uint256)" \
   $HOUSE_BOOK $ORACLE $PROTOCOL_RESERVE 6000000000000000 \
   --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 
-# ── Tune after Pons graduation (once $PITBOSS supply/decimals are known) ──
-# amm.setPrice(<PRICE_PIT in wei>)            — e.g. 500000000000000000000000 = 500k tokens
-# activation.setActivationFee(<fee in wei>)   — e.g.     500000000000000000000 = 500 tokens
+# ── Tune after Pons graduation (once $PITBOSS decimals — expected 18 — are confirmed) ──
+# Minting is FREE via the deployed FreeMintPass (gas only); the AMM price is not
+# part of minting. Activation fee is 888,888 $PITBOSS (444,444 burned / 444,444
+# House Book per activation). The DEPLOYED ActivationManager predates this
+# default (500), so set it on-chain after setPIT():
+cast send $ACTIVATION "setActivationFee(uint256)" 888888000000000000000000 \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# ⚠️ Do NOT fund the LoanVault $PITBOSS float while free mint is open: the desk
+# lends amm.PRICE_PIT() per Boss, and Bosses cost nothing to mint — a funded
+# float could be drained via mint → borrow → default. Leave it unfunded until
+# the loan economics are revisited post-launch.
+
+# ── FreeMintPass upgrade (batch mint, max 10 per wallet) ──
+# The first deployed pass mints 1/tx with NO wallet cap. The repo's current
+# FreeMintPass adds mint(uint256 count) + MAX_PER_WALLET = 10. To upgrade:
+forge create src/nft/FreeMintPass.sol:FreeMintPass \
+  --constructor-args $PITBOSS_NFT --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $PITBOSS_NFT "setMinter(address,bool)" $NEW_PASS true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $PITBOSS_NFT "setMinter(address,bool)" $OLD_PASS false \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+# then: update "FreeMintPass" in deployments.4663.json to $NEW_PASS and commit.
+# The site auto-detects the upgrade (probes MAX_PER_WALLET): old pass = single
+# mint button, new pass = 1–10 stepper. Wallets that minted on the old pass
+# start at 0/10 on the new one.
 ```
 
 ### e) Randomness pairing + fee float (required)

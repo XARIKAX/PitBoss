@@ -18,7 +18,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'PitBosses — Run the floor. Get paid in stock.',
+  title: 'PitBosses',
   description:
     'Buy a Boss. Work the Pit. Be the House. Rewards are promotional, not dividends. A permissionless front end by PitBoss Labs.',
   // OG/Twitter card: 1200x630 center crop of the banner, nothing else.

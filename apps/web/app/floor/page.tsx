@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther, isAddress, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat, PillLink } from '@/components/ui';
@@ -49,7 +49,7 @@ export default function FloorPage() {
         ) : !ammLive ? (
           <EmptyState
             title="Minting opens at launch"
-            hint="Buy and snipe go live here the moment the floor opens — flat price, paid in $PITBOSS, straight from the vault."
+            hint="Buy and snipe go live here the moment the floor opens — minting is free, just a small ETH fee straight to the House Book."
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -117,95 +117,193 @@ function BossGallery() {
 /* --------------------------------------------------------------- free mint */
 
 function FreeMintCard() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { c } = useContracts();
   const { send, busy } = useTx();
-  const [count, setCount] = useState(1);
+  const [qty, setQty] = useState(1);
 
   const minted = useRead<bigint>({ contract: c.pitBoss, functionName: 'totalMinted', refetchInterval: 10_000 });
   const maxSupply = useRead<bigint>({ contract: c.pitBoss, functionName: 'MAX_SUPPLY' });
   const open = useRead<boolean>({ contract: c.freeMintPass, functionName: 'open', refetchInterval: 15_000 });
+  // Batch support probe: only the upgraded pass has MAX_PER_WALLET. On the
+  // single-mint pass this read fails and the stepper locks to 1.
+  const maxPerWallet = useRead<bigint>({ contract: c.freeMintPass, functionName: 'MAX_PER_WALLET' });
+  const remaining = useRead<bigint>({
+    contract: c.freeMintPass,
+    functionName: 'remainingOf',
+    args: address ? [address] : undefined,
+    enabled: Boolean(address) && maxPerWallet.data != null,
+    refetchInterval: 15_000,
+  });
+
+  const batch = maxPerWallet.data != null;
+  const walletMax = batch
+    ? Number(remaining.data ?? maxPerWallet.data ?? 1n)
+    : 1;
+  const maxQty = Math.max(1, Math.min(10, walletMax));
+  const qtyClamped = Math.min(qty, maxQty);
+  const walletTapped = batch && remaining.data != null && remaining.data === 0n;
 
   const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
   const paused = open.data === false;
-
-  const remaining = minted.data != null && maxSupply.data != null
-    ? Number(maxSupply.data - minted.data)
-    : null;
-  const maxCount = Math.min(10, remaining ?? 10);
+  const supplyPct =
+    minted.data != null && maxSupply.data != null && maxSupply.data > 0n
+      ? Number((minted.data * 10_000n) / maxSupply.data) / 100
+      : 0;
 
   async function onMint() {
-    if (count === 1) {
-      await send(
-        { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
-        { title: 'Mint your Boss' },
-      );
-    } else {
-      await send(
-        { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mintMany', args: [BigInt(count)] },
-        { title: `Mint ${count} Bosses` },
-      );
-    }
+    await send(
+      batch && qtyClamped > 1
+        ? {
+            address: c.freeMintPass.address,
+            abi: c.freeMintPass.abi,
+            functionName: 'mint',
+            args: [BigInt(qtyClamped)],
+          }
+        : { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+      { title: qtyClamped > 1 ? `Mint ${qtyClamped} Bosses` : 'Mint your Boss' },
+    );
     minted.refetch?.();
+    remaining.refetch?.();
   }
 
   return (
-    <div className="card max-w-md">
-      <p className="headline text-[15px]">Free Mint</p>
-      <p className="mt-2 text-sm text-mute">
-        Mint a PitBoss NFT — pay only gas. You get a token-bound account and a seat on the floor.
-        Supply is limited to 888.
-      </p>
-      <div className="mt-5 space-y-2 text-sm">
-        <Row k="Price" v="Free (gas only)" />
-        <Row
-          k="Minted"
-          v={
-            minted.data != null && maxSupply.data != null
-              ? `${minted.data.toString()} / ${maxSupply.data.toString()}`
-              : '…'
-          }
-        />
-        <Row k="Status" v={soldOut ? 'Sold out' : paused ? 'Paused' : 'Open'} />
-      </div>
+    <div className="dashed relative overflow-hidden bg-lime/[0.03] p-6 sm:p-9">
+      {/* radial glow behind the desk */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 h-[300px] w-[640px] -translate-x-1/2 rounded-full bg-lime/[0.06] blur-3xl"
+      />
 
-      {/* Batch count selector */}
-      {!soldOut && !paused && (
-        <div className="mt-4">
-          <p className="eyebrow mb-2">How many?</p>
-          <div className="flex gap-2">
-            {[1, 2, 3, 5, 10].filter((n) => n <= maxCount).map((n) => (
-              <button
-                key={n}
-                onClick={() => setCount(n)}
-                className={`flex-1 rounded-xl border py-2 text-sm font-mono transition-colors ${
-                  count === n
-                    ? 'border-lime bg-lime/10 text-lime'
-                    : 'border-line bg-black/40 text-mute hover:border-lime/50'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+      <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        {/* ── Left: supply telemetry ── */}
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="label-lime flex items-center gap-2">
+              <span className="inline-block h-px w-5 bg-lime/60" /> Free Mint
+            </p>
+            <span className="chip border-gold/60 text-gold">
+              <span className="h-1.5 w-1.5 animate-dot rounded-full bg-gold" />
+              {soldOut ? 'Sold out' : paused ? 'Paused' : 'Live'}
+            </span>
+          </div>
+
+          <h3 className="headline text-h2 mt-3">
+            Mint your Boss. <span className="em">Pay nothing.</span>
+          </h3>
+          <p className="mt-3 max-w-md text-[13px] leading-relaxed text-mute">
+            Free — gas only. Every Boss is born with its own onchain wallet (ERC-6551) and a
+            seat on a floor where every fee pays the holders.
+          </p>
+
+          {/* supply meter */}
+          <div className="mt-6 max-w-md">
+            <div className="flex items-end justify-between">
+              <p className="num font-mono text-[40px] font-bold leading-none text-lime [text-shadow:0_0_18px_rgba(198,255,0,0.45)]">
+                {minted.data != null ? minted.data.toString() : '—'}
+                <span className="text-[20px] text-mute [text-shadow:none]">
+                  {' '}
+                  / {maxSupply.data != null ? maxSupply.data.toString() : '888'}
+                </span>
+              </p>
+              <p className="label">{supplyPct.toFixed(1)}% minted</p>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line2">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-lime to-gold transition-[width] duration-700"
+                style={{ width: `${Math.max(supplyPct, 0.5)}%` }}
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+              {[
+                ['Price', 'FREE · gas only'],
+                ['Supply', '888 · fixed forever'],
+                ['Wallet', 'built into every Boss'],
+              ].map(([k, v]) => (
+                <p key={k} className="text-[11px] text-mute">
+                  <span className="label-lime">{k}</span>{' '}
+                  <span className="font-mono uppercase tracking-wide text-paper">{v}</span>
+                </p>
+              ))}
+            </div>
           </div>
         </div>
-      )}
 
-      <button
-        onClick={onMint}
-        disabled={!isConnected || busy || soldOut || paused}
-        className="pill-lime mt-4 w-full disabled:opacity-50"
-      >
-        {!isConnected
-          ? 'Connect to mint'
-          : soldOut
-            ? 'Sold out'
-            : paused
-              ? 'Mint paused'
-              : count === 1
-                ? 'Mint your Boss — free'
-                : `Mint ${count} Bosses — free`}
-      </button>
+        {/* ── Right: THE button ── */}
+        <div className="flex flex-col items-stretch gap-3">
+          {/* quantity stepper — unlocks to 10 on the batch-capable pass */}
+          {batch && !soldOut && !paused ? (
+            <div className="flex items-center justify-between rounded-[12px] border border-line bg-black/30 px-3 py-2">
+              <button
+                onClick={() => setQty((q) => Math.max(1, Math.min(q, maxQty) - 1))}
+                disabled={qtyClamped <= 1 || busy}
+                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                aria-label="Fewer"
+              >
+                −
+              </button>
+              <div className="text-center">
+                <p className="num font-mono text-[26px] font-bold leading-none text-lime">
+                  {qtyClamped}
+                </p>
+                <p className="label mt-0.5">
+                  {walletTapped ? 'wallet limit reached' : `of ${maxQty} available to you`}
+                </p>
+              </div>
+              <button
+                onClick={() => setQty((q) => Math.min(maxQty, Math.min(q, maxQty) + 1))}
+                disabled={qtyClamped >= maxQty || busy}
+                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                aria-label="More"
+              >
+                +
+              </button>
+            </div>
+          ) : null}
+          <button
+            onClick={onMint}
+            disabled={!isConnected || busy || soldOut || paused || walletTapped}
+            className="group relative h-20 overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8ff2e] to-[#a8d900] font-mono text-[17px] font-bold uppercase tracking-[0.12em] text-black shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_18px_50px_-12px_rgba(198,255,0,0.45),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgba(198,255,0,0.6),0_24px_60px_-12px_rgba(198,255,0,0.6),inset_0_1px_0_rgba(255,255,255,0.5)] active:translate-y-0 active:shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_8px_24px_-10px_rgba(198,255,0,0.4)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0"
+          >
+            {/* shine sweep */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_35%,rgba(255,255,255,0.5)_50%,transparent_65%)] bg-[length:250%_100%] animate-strip-sweep opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            />
+            {/* scanlines */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.05)_0px,rgba(0,0,0,0.05)_1px,transparent_1px,transparent_3px)]"
+            />
+            <span className="relative flex items-center justify-center gap-3">
+              {busy ? (
+                <>
+                  <span className="h-2 w-2 animate-dot rounded-full bg-black" />
+                  Minting…
+                </>
+              ) : !isConnected ? (
+                'Connect to mint'
+              ) : soldOut ? (
+                'Sold out — 888 / 888'
+              ) : paused ? (
+                'Mint paused'
+              ) : walletTapped ? (
+                'Wallet limit reached — 10 / 10'
+              ) : (
+                <>
+                  {qtyClamped > 1 ? `Mint ${qtyClamped} Bosses` : 'Mint a Boss'}
+                  <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+                </>
+              )}
+            </span>
+          </button>
+          <p className="label text-center">
+            {batch
+              ? 'Up to 10 per wallet, one transaction · NFT + its own wallet · no allowlist, no cost'
+              : 'One transaction · NFT + its own wallet · no allowlist, no token, no cost'}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -230,8 +328,9 @@ function BuyNextCard() {
     enabled: Boolean(address),
   });
 
+  const free = price.data != null && price.data === 0n;
   const needsApprove =
-    price.data != null && (allowance.data == null || allowance.data < price.data);
+    price.data != null && price.data > 0n && (allowance.data == null || allowance.data < price.data);
 
   async function onBuy() {
     if (price.data == null) return;
@@ -262,11 +361,15 @@ function BuyNextCard() {
     <div className="card">
       <p className="headline text-[15px]">Buy off the AMM</p>
       <p className="mt-2 text-sm text-mute">
-        Flat-price vault. Pay the PIT price plus a small ETH fee; the vault mints or hands over the
-        next Boss in inventory.
+        {free
+          ? 'Free mint — no tokens needed. Pay only a small ETH fee and the vault mints or hands over the next Boss in inventory.'
+          : 'Flat-price vault. Pay the $PITBOSS price plus a small ETH fee; the vault mints or hands over the next Boss in inventory.'}
       </p>
       <div className="mt-5 space-y-2 text-sm">
-        <Row k="Price" v={price.data != null ? `${formatEther(price.data)} PIT` : '…'} />
+        <Row
+          k="Price"
+          v={price.data != null ? (free ? 'FREE' : `${formatEther(price.data)} $PITBOSS`) : '…'}
+        />
         <Row k="Buy fee" v={buyFee.data != null ? `Ξ${formatEther(buyFee.data)}` : '…'} />
         <Row
           k="Next up"
@@ -296,8 +399,10 @@ function BuyNextCard() {
         {!isConnected
           ? 'Connect to buy'
           : needsApprove
-            ? `1 · Approve ${price.data != null ? formatEther(price.data) : ''} PIT`
-            : '2 · Buy next Boss'}
+            ? `1 · Approve ${price.data != null ? formatEther(price.data) : ''} $PITBOSS`
+            : free
+              ? 'Mint free Boss'
+              : '2 · Buy next Boss'}
       </button>
     </div>
   );
@@ -319,8 +424,9 @@ function SnipeCard() {
     enabled: Boolean(address),
   });
 
+  const free = price.data != null && price.data === 0n;
   const needsApprove =
-    price.data != null && (allowance.data == null || allowance.data < price.data);
+    price.data != null && price.data > 0n && (allowance.data == null || allowance.data < price.data);
   const idOk = /^\d+$/.test(id.trim());
 
   async function onSnipe() {
@@ -355,7 +461,9 @@ function SnipeCard() {
     <div className="card">
       <p className="headline text-[15px]">Snipe a listing</p>
       <p className="mt-2 text-sm text-mute">
-        Take a specific Boss out of vault inventory — same PIT price, higher ETH fee.
+        {free
+          ? 'Take a specific Boss out of vault inventory — still free, just a higher ETH fee.'
+          : 'Take a specific Boss out of vault inventory — same $PITBOSS price, higher ETH fee.'}
       </p>
       {empty ? (
         <div className="mt-5">
@@ -418,11 +526,81 @@ function MyBosses({ owner, chainId }: { owner: Address; chainId: number }) {
   );
 }
 
+/** Full-screen enlargement of a Boss portrait. Backdrop click / X / Escape close. */
+function BossLightbox({
+  id,
+  activated,
+  onClose,
+}: {
+  id: bigint;
+  activated: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-black/85 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`PitBoss #${id.toString()} enlarged`}
+    >
+      <div
+        className="relative w-full max-w-[560px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className={`overflow-hidden rounded-[16px] border-2 ${
+            activated
+              ? 'border-lime/60 shadow-[0_0_80px_-16px_rgba(198,255,0,0.5)]'
+              : 'border-line shadow-[0_40px_120px_-24px_rgba(0,0,0,0.9)]'
+          }`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/bosses/${id.toString()}.png`}
+            alt={`PitBoss #${id.toString()}`}
+            className="aspect-square w-full [image-rendering:pixelated]"
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <div>
+            <p className="headline text-xl">Boss #{id.toString()}</p>
+            <p className="label mt-1">PitBosses · 888 fixed supply · Robinhood Chain</p>
+          </div>
+          {activated ? (
+            <span className="chip chip-lime bg-lime/5">active</span>
+          ) : (
+            <span className="chip">dormant</span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="absolute -right-3 -top-3 grid h-10 w-10 place-items-center rounded-full border border-line bg-black font-mono text-[15px] text-paper transition hover:border-lime/60 hover:text-lime"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number }) {
   const { c } = useContracts();
   const { send, busy } = useTx();
   const info = useBossInfo(id);
   const [dcaToken, setDcaToken] = useState('');
+  const [enlarged, setEnlarged] = useState(false);
 
   const d = info.data;
   const fmt = (v: bigint | null | undefined, suffix = '') =>
@@ -459,14 +637,45 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
   }
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
+    <div className="card overflow-hidden">
+      {/* Portrait — the real art for this token id; click to enlarge. */}
+      <button
+        onClick={() => setEnlarged(true)}
+        className={`group relative block w-full overflow-hidden rounded-[12px] border transition ${
+          d?.activated
+            ? 'border-lime/50 shadow-[0_0_32px_-8px_rgba(198,255,0,0.4)]'
+            : 'border-line hover:border-lime/40'
+        }`}
+        aria-label={`Enlarge PitBoss #${id.toString()}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/bosses/${id.toString()}.png`}
+          alt={`PitBoss #${id.toString()}`}
+          className="aspect-square w-full [image-rendering:pixelated] transition-transform duration-300 group-hover:scale-[1.03]"
+        />
+        {/* status chip over the art */}
+        <span className="absolute right-3 top-3">
+          {d?.activated == null ? null : d.activated ? (
+            <span className="chip chip-lime bg-black/60 backdrop-blur">active</span>
+          ) : (
+            <span className="chip bg-black/60 backdrop-blur">dormant</span>
+          )}
+        </span>
+        {/* zoom hint */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="label">click to enlarge</span>
+          <span className="font-mono text-[13px] text-lime">⤢</span>
+        </span>
+      </button>
+
+      {enlarged ? (
+        <BossLightbox id={id} activated={Boolean(d?.activated)} onClose={() => setEnlarged(false)} />
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between">
         <p className="headline text-lg">Boss #{id.toString()}</p>
-        {d?.activated == null ? null : d.activated ? (
-          <span className="chip chip-lime bg-lime/5">active</span>
-        ) : (
-          <span className="chip">dormant</span>
-        )}
+        <p className="label">{d?.activated ? 'On the payroll' : 'Activate to start earning'}</p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -620,18 +829,26 @@ function ActivateButtons({ id, activated }: { id: bigint; activated: boolean | n
 
 /* ---------------------------------------------------------------- activate */
 
+/** The launch activation fee. The deployed manager predates this config (500);
+ *  until setActivationFee lands on-chain we show the real launch number, then
+ *  track whatever the contract says. */
+const STALE_DEFAULT_FEE = 500n * 10n ** 18n;
+const LAUNCH_ACTIVATION_FEE = '888,888';
+
 function ActivateCard() {
   const { isConnected } = useAccount();
   const { c } = useContracts();
   const fee = useRead<bigint>({ contract: c.activationManager, functionName: 'activationFee' });
+  const feeLabel =
+    fee.data == null || fee.data === STALE_DEFAULT_FEE
+      ? `${LAUNCH_ACTIVATION_FEE} $PITBOSS`
+      : `${formatEther(fee.data)} $PITBOSS`;
 
   return (
     <div className="card">
       <p className="max-w-prose text-sm text-mute">
         A Boss earns nothing until it&apos;s activated. Activation costs{' '}
-        <span className="data text-lime">
-          {fee.data != null ? `${formatEther(fee.data)} PIT` : '…'}
-        </span>{' '}
+        <span className="data text-lime">{feeLabel}</span>{' '}
         and opens it to floor position, streaks and rewards. Use the Activate button on any of your
         Bosses above — approve the fee once, then activate.
       </p>

@@ -86,7 +86,7 @@ Prints `ORACLE` and `SWAP_ROUTER` — feed both into the system deploy.
 | 4 | `PitBoss` | 888-supply ERC-721, TBA per token | minter = AMM |
 | 5 | `FloorPosition` | weight/streak engine | `setRewardSink(HouseBook)` |
 | 6 | `HouseBook` | single fee sink + crank | constructor(boss, floor, router) |
-| 7 | `FlatAMMVault` | flat-price NFT AMM | `PitBoss.setMinter(amm)`; price is **settable** (`setPrice`) |
+| 7 | `FlatAMMVault` | primary market — **mint is FREE** (ETH fee only, default price 0) | `PitBoss.setMinter(amm)`; optional paid mode via `setPrice` |
 | 8 | `ActivationManager` | Boss activation (50% burn / 50% book) | `floor.setBumper(activation)`; fee **settable** (`setActivationFee`) |
 | 9 | `BearerCertificate` + `CertificateCounter` | stock→deed NFTs, $2 flat fee | `cert.setIssuer(counter)` |
 | 10 | `DegenRollFactory` | creates **Degen Roll** machines | full Wiring struct |
@@ -204,9 +204,13 @@ floor.setBumper(<game>, true)
 
 ### d) Global config (owner calls)
 ```
-amm.setPrice(<price in $PITBOSS>)               # tune to $PITBOSS supply/decimals
-activation.setActivationFee(<fee in $PITBOSS>)  # tune to $PITBOSS decimals
+# Activation defaults to 888,888 $PITBOSS (444,444 burned / 444,444 book).
+# activation.setActivationFee(<fee>) only if changing that — confirm token decimals = 18.
 counter.setRouted(<stock>, true)                # per stock sealable into a certificate
+# MINT IS FREE by default (PRICE_PIT = 0): no setPrice call needed.
+# amm.setPrice(<amount>) is OPTIONAL — setting it non-zero charges $PITBOSS
+# per Boss AND opens the loan desk (loans lend that flat amount; they stay
+# closed at price 0 so free-minted collateral can't drain the loan float).
 ```
 
 ### e) Randomness pairing + fee float (REQUIRED — games won't spin without it)
@@ -254,8 +258,10 @@ delivers and `wordOf` becomes readable.
 
 **(b) `$PITBOSS` is a taxed token (1–2%).** All accounting is fee-on-transfer
 safe (balance-diff, dead-address burn), but confirm on chain: the **decimals and
-supply** of your Pons token, and that `setPrice` / `setActivationFee` are tuned
-to them. A wrong decimals assumption mis-prices every Boss.
+supply** of your Pons token, and that `setActivationFee` is tuned to them (mint
+is free, so activation is the main token sink). A wrong decimals assumption
+mis-prices activation. The loan desk stays closed until a non-zero `setPrice`
+is deliberately configured.
 
 **(c) USDG route slippage.** The payout swap is multi-hop through USDG. Verify
 acceptable slippage per stock at realistic sizes — thin USDG↔stock liquidity
@@ -335,12 +341,12 @@ authority.
 | **Roulette** rake | 2% total: 0.5% creator / 0.5% House Book / 1% protocol (single-zero, 2.70% edge) |
 | Sell-back | 95% of the oracle mark (both games) |
 | Refund window | unfulfilled pull refunds after 48h |
-| Activation | `activationFee` (settable, $PITBOSS): 50% burned / 50% House Book |
+| Activation | **888,888 $PITBOSS** default (settable): 444,444 burned / 444,444 House Book |
 | Certificate fee | $2 in ETH (`feeUsd`, settable): 50% book / 50% reserve |
-| Loans | 15% APR (30% late), NFT collateral, borrow flat AMM principal |
+| Loans | 15% APR (30% late), NFT collateral; desk closed while mint is free |
 | Launcher | 1% curve fee, 30% of it → Opening Bell; 20% supply seeds the pool |
 | Crank tip | 0.5% of the pot |
-| AMM Boss price | `PRICE_PIT` (settable via `setPrice`, in $PITBOSS) |
+| Boss mint | **FREE** (`PRICE_PIT = 0` default) + 0.002 ETH fee → House Book; snipe 0.006 ETH |
 
 `docs/LAUNCH_CONFIG.md` is the address appendix; `contracts/test/` shows every
 flow working end-to-end; `docs/modules/` has per-module notes.

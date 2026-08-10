@@ -17,7 +17,9 @@ import {Errors} from "../lib/Errors.sol";
 ///         borrowing is never cheaper than an AMM exit) is charged for the term.
 ///         Repay the exact principal to reclaim the Boss; overdue loans accrue an
 ///         ETH late fee; default liquidates the Boss into the AMM vault. Fees split
-///         70% House Book / 30% protocol reserve.
+///         70% House Book / 30% protocol reserve. The desk only operates while the
+///         AMM has a non-zero flat price (mint is free by default → desk closed
+///         until a price is configured).
 /// @dev    The vault holds a $PIT float (funded at deploy) it lends from. On default
 ///         the collateral Boss is deposited into the AMM as inventory, keeping the
 ///         500k-$PIT of value inside the protocol. Audit-scoped.
@@ -119,6 +121,10 @@ contract LoanVault is ReentrancyGuard, Ownable {
 
     function borrow(uint256 bossId, uint64 term) external payable nonReentrant returns (uint256 loanId) {
         if (address(pit) == address(0)) revert Errors.NotInitialized();
+        // The desk is closed while the AMM price is 0 (free mint): lending a
+        // non-zero float against freely minted collateral would drain it, and
+        // lending 0 would take collateral for nothing.
+        if (principalPit() == 0) revert Errors.NotInitialized();
         if (boss.ownerOf(bossId) != msg.sender) revert Errors.NotOwner();
         if (term < MIN_TERM) revert Errors.InvalidConfig();
 

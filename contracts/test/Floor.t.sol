@@ -54,4 +54,58 @@ contract FloorTest is TestBase {
         assertEq(floor.weightOf(id), 0, "weight removed after sync");
         assertEq(floor.totalWeight(), 0, "totalWeight back to zero");
     }
+
+    /// @dev Free mint: with PRICE_PIT == 0 (the default), buying needs no PIT
+    ///      balance and no approval — only the ETH fee, which goes to the book.
+    function test_FreeMint_NoTokensNeeded() public {
+        assertEq(amm.PRICE_PIT(), 0, "mint is free by default");
+        address fresh = makeAddr("fresh");
+        vm.deal(fresh, 1 ether);
+        assertEq(pit.balanceOf(fresh), 0, "no PIT held");
+
+        uint256 bookBefore = address(book).balance;
+        uint256 fee = amm.buyFee(); // hoisted: a view call would consume the prank
+        vm.prank(fresh);
+        uint256 id = amm.buyNext{value: fee}();
+
+        assertEq(boss.ownerOf(id), fresh, "boss minted to buyer");
+        assertEq(pit.balanceOf(address(amm)), 0, "no tokens pulled");
+        assertEq(address(book).balance, bookBefore + fee, "ETH fee to book");
+    }
+
+    /// @dev Setting a non-zero price re-enables the flat token charge.
+    function test_PaidMint_WhenPriceSet() public {
+        amm.setPrice(1_000 ether);
+        address buyer = makeAddr("payer");
+        vm.deal(buyer, 1 ether);
+        uint256 fee = amm.buyFee(); // hoisted: a view call would consume prank/expectRevert
+
+        // No approval → the pull reverts.
+        vm.prank(buyer);
+        vm.expectRevert();
+        amm.buyNext{value: fee}();
+
+        // Funded + approved → charged exactly the price.
+        vm.prank(treasury);
+        pit.transfer(buyer, 1_000 ether);
+        vm.startPrank(buyer);
+        pit.approve(address(amm), 1_000 ether);
+        uint256 id = amm.buyNext{value: fee}();
+        vm.stopPrank();
+
+        assertEq(boss.ownerOf(id), buyer, "boss minted");
+        assertEq(pit.balanceOf(address(amm)), 1_000 ether, "flat price charged");
+    }
+
+    /// @dev The loan desk is closed while mint is free: lending against freely
+    ///      minted collateral would drain the float.
+    function test_LoanDeskClosed_WhileMintFree() public {
+        uint256 id = buyBoss(a);
+        vm.deal(a, 1 ether);
+        vm.startPrank(a);
+        boss.approve(address(loans), id);
+        vm.expectRevert();
+        loans.borrow{value: 0.1 ether}(id, 7 days);
+        vm.stopPrank();
+    }
 }

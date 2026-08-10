@@ -97,7 +97,8 @@ contract AdaptersTest is Test {
     }
 
     function test_Oracle_EthPerToken() public view {
-        uint256 expected = (224e8 * 1e18) / 3000e8;
+        uint256 usdToken = 224e8;
+        uint256 expected = (usdToken * 1e18) / 3000e8; // integer division, like the adapter
         assertEq(oracle.ethPerToken(address(stock)), expected, "wei per token");
     }
 
