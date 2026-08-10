@@ -173,10 +173,18 @@ cast send $VRF_CONDUCTOR --value 0.1ether \
   --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 ```
 
-### f) NFT art
-```
-Pin the 888 images + metadata to IPFS → base URI
-PitBoss.setBaseURI(<ipfs base URI>)
+### f) NFT art → OpenSea (Robinhood Chain is OpenSea-supported since July 2026)
+```bash
+# One command: pins images → rewrites REPLACE_CID → strips .json (tokenURI
+# appends the bare id) → pins metadata → sends setBaseURI.
+PINATA_JWT=<pinata jwt> AUTO_SET=1 \
+PITBOSS_NFT=<PitBoss address> PRIVATE_KEY=<owner key> \
+./art/pitbosses/pin-metadata.sh
+
+# Dry-run the local staging first (no network): ./art/pitbosses/pin-metadata.sh --stage-only
+# Omit AUTO_SET to just print the cast command instead of sending it.
+# Then: verify tokenURI(1) on Blockscout; "Refresh metadata" on OpenSea;
+# claim the collection page with the deployer wallet (banner/description/links).
 ```
 
 ### g) Seed capital
