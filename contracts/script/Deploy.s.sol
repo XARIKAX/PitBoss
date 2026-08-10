@@ -26,19 +26,41 @@ import {MockStockToken} from "../src/mocks/MockStockToken.sol";
 import {MockOracle} from "../src/mocks/MockOracle.sol";
 import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
 import {MockEntropyConductor} from "../src/mocks/MockEntropyConductor.sol";
+import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {MinerEntropyConductor} from "../src/pit/entropy/MinerEntropyConductor.sol";
 import {VRFEntropyConductor} from "../src/pit/entropy/VRFEntropyConductor.sol";
 import {VRFServiceConductor} from "../src/pit/entropy/VRFServiceConductor.sol";
-import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {Chains} from "../src/config/Chains.sol";
 
 /// @title Deploy
-/// @notice Idempotent full-system deploy. On local/anvil (or when USE_MOCKS=true) it
+/// @notice Idempotent full-system deploy. On local/anvil (or USE_MOCKS=true) it
 ///         deploys mock stock/oracle/router/entropy so every page works against a
-///         fork; on a real chain it wires the entropy conductor per Chains config
-///         and expects real oracle/router/stock addresses via env. Writes
-///         deployments/deployments.<chainId>.json consumed by the web app + docs.
-/// @dev    Run: forge script script/Deploy.s.sol --rpc-url <url> --broadcast
+///         fork; on a real chain it wires real adapters and the Pons-launched PIT
+///         token. Writes deployments/deployments.<chainId>.json consumed by the
+///         web app and keeper bots.
+///
+/// @dev    Run on mainnet:
+///           1. Deploy adapters first: forge script script/DeployIntegrations.s.sol
+///           2. Launch $PIT on Pons; note the graduated token address.
+///           3. Set env vars and run: forge script script/Deploy.s.sol --broadcast
+///
+///         Mainnet env vars:
+///           PIT_TOKEN         — Pons-graduated $PIT token address (optional;
+///                               omit to deploy without PIT and wire later via
+///                               FlatAMMVault.setPIT / ActivationManager.setPIT
+///                               / LoanVault.setPIT after Pons graduation)
+///           TREASURY          — fee sink (defaults to deployer)
+///           PROTOCOL_RESERVE  — fee split receiver (defaults to deployer)
+///           ROYALTY_RECEIVER  — ERC-2981 receiver (defaults to deployer)
+///           ORACLE            — ChainlinkOracleAdapter from DeployIntegrations
+///           SWAP_ROUTER       — UniV3RouterAdapter from DeployIntegrations
+///           POOL_DEPLOYER     — V3PoolDeployerAdapter from DeployIntegrations
+///           STOCK_SAMPLE      — a real tokenized-stock address (first machine)
+///           VRF_SERVICE       — Robinhood Chain IVRFService address
+///           VRF_COORDINATOR   — Chainlink VRF v2.5 coordinator (Base chain only)
+///
+///         Local dev (USE_MOCKS=true or chainId 31337):
+///           All infra is auto-mocked; PIT.sol is deployed locally.
 contract Deploy is Script {
     struct Addrs {
         address pit;
@@ -66,35 +88,35 @@ contract Deploy is Script {
     }
 
     function run() external {
-        address treasury = _envOr("TREASURY", msg.sender);
+        address treasury        = _envOr("TREASURY", msg.sender);
         address protocolReserve = _envOr("PROTOCOL_RESERVE", msg.sender);
-        address royalty = _envOr("ROYALTY_RECEIVER", msg.sender);
-        bool useMocks = _envBool("USE_MOCKS", block.chainid == 31337);
+        address royalty         = _envOr("ROYALTY_RECEIVER", msg.sender);
+        bool    useMocks        = _envBool("USE_MOCKS", block.chainid == 31337);
 
         vm.startBroadcast();
         Addrs memory a;
 
-        // ---- external deps (mocks locally) ----
+        // ── external deps ────────────────────────────────────────────────────────
         if (useMocks) {
-            MockOracle o = new MockOracle();
+            MockOracle o    = new MockOracle();
             MockSwapRouter r = new MockSwapRouter(address(o));
             MockStockToken s = new MockStockToken("Tokenized NVDA", "tNVDA", 18);
             o.setEthPerToken(address(s), 1e15);
             o.setUsdPerEth(3000e8);
-            a.oracle = address(o);
-            a.router = address(r);
+            a.oracle      = address(o);
+            a.router      = address(r);
             a.stockSample = address(s);
-            a.conductor = address(new MockEntropyConductor());
+            a.conductor   = address(new MockEntropyConductor());
+            a.poolDeployer = address(new MockPoolDeployer());
         } else {
-            a.oracle = vm.envAddress("ORACLE");
-            a.router = vm.envAddress("SWAP_ROUTER");
+            a.oracle      = vm.envAddress("ORACLE");
+            a.router      = vm.envAddress("SWAP_ROUTER");
             a.stockSample = vm.envAddress("STOCK_SAMPLE");
+            a.poolDeployer = vm.envAddress("POOL_DEPLOYER");
             Chains.EntropyKind ek = Chains.entropyKind(block.chainid);
             if (ek == Chains.EntropyKind.VRFService) {
-                // Robinhood Chain: adapt the managed IVRFService (BlockhashRandomness
-                // ServiceV3, later Pyth). After deploy: the service owner must
-                // setSpinEngine(this conductor), and the conductor must be funded
-                // with ETH to pre-pay per-request VRF fees.
+                // Robinhood Chain: managed IVRFService. After deploy: the service
+                // owner must setSpinEngine(conductor) and fund it with ETH for fees.
                 a.conductor = address(new VRFServiceConductor(vm.envAddress("VRF_SERVICE"), msg.sender));
             } else if (ek == Chains.EntropyKind.Miner) {
                 a.conductor = address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)));
@@ -102,35 +124,40 @@ contract Deploy is Script {
                 a.conductor = address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
             }
         }
-        a.poolDeployer = address(new MockPoolDeployer()); // replace with V3 adapter on mainnet
 
-        // ---- token + collection ----
-        // Protocol token: use the launchpad token ($PITBOSS on Pons) when its
-        // address is provided; otherwise deploy the reference PIT.sol (local/test).
-        a.pit = _envOr("PIT_TOKEN", address(0));
-        if (a.pit == address(0)) a.pit = address(new PIT(treasury));
-        a.account = address(new PitBossAccount());
+        // ── $PIT token ───────────────────────────────────────────────────────────
+        // Mocks: deploy PIT.sol locally (treasury receives full supply).
+        // Mainnet: PIT_TOKEN is optional — omit to deploy platform without PIT now
+        //          and wire the Pons-graduated address later via setPIT().
+        if (useMocks) {
+            a.pit = address(new PIT(treasury));
+        } else {
+            a.pit = _envOr("PIT_TOKEN", address(0)); // address(0) → deferred via setPIT()
+        }
+
+        // ── token-bound accounts + collection ────────────────────────────────────
+        a.account  = address(new PitBossAccount());
         a.registry = address(new InitializingRegistry(a.account));
-        a.boss = address(new PitBoss(a.registry, royalty));
+        a.boss     = address(new PitBoss(a.registry, royalty));
 
-        // ---- floor + book ----
+        // ── floor + book ─────────────────────────────────────────────────────────
         FloorPosition floor = new FloorPosition();
         a.floor = address(floor);
         HouseBook book = new HouseBook(a.boss, a.floor, a.router);
         a.book = address(book);
         floor.setRewardSink(a.book);
 
-        // ---- amm ----
+        // ── amm ──────────────────────────────────────────────────────────────────
         FlatAMMVault amm = new FlatAMMVault(a.boss, a.pit, a.book);
         a.amm = address(amm);
         PitBoss(a.boss).setMinter(a.amm, true);
 
-        // ---- activation ----
+        // ── activation ───────────────────────────────────────────────────────────
         ActivationManager activation = new ActivationManager(a.boss, a.pit, a.floor, a.book);
         a.activation = address(activation);
         floor.setBumper(a.activation, true);
 
-        // ---- certificates ----
+        // ── certificates ─────────────────────────────────────────────────────────
         BearerCertificate cert = new BearerCertificate(a.registry, royalty);
         a.certificate = address(cert);
         CertificateCounter counter = new CertificateCounter(a.certificate, a.book, a.oracle, protocolReserve);
@@ -138,7 +165,7 @@ contract Deploy is Script {
         cert.setIssuer(a.counter, true);
         if (useMocks) counter.setRouted(a.stockSample, true);
 
-        // ---- degen roll factory + sample machine ----
+        // ── degen roll factory + sample machine (mocks only) ─────────────────────
         DegenRollFactory factory = new DegenRollFactory(
             DegenRollFactory.Wiring({
                 conductor: a.conductor,
@@ -159,7 +186,7 @@ contract Deploy is Script {
             floor.setBumper(machine, true);
         }
 
-        // ---- roulette factory + sample wheel ----
+        // ── roulette factory + sample wheel (mocks only) ─────────────────────────
         RouletteWheelFactory rFactory = new RouletteWheelFactory(
             RouletteWheelFactory.Wiring({
                 conductor: a.conductor,
@@ -180,20 +207,20 @@ contract Deploy is Script {
             floor.setBumper(wheel, true);
         }
 
-        // ---- locker + loans ----
+        // ── locker + loans ───────────────────────────────────────────────────────
         a.locker = address(new LiquidityLocker(a.book));
         LoanVault loans = new LoanVault(a.boss, a.pit, a.amm, a.book, a.oracle, protocolReserve);
         a.loans = address(loans);
         amm.setLiquidator(a.loans, true);
 
-        // ---- launcher + bell ----
+        // ── launcher + bell ──────────────────────────────────────────────────────
         OpeningBell bell = new OpeningBell(a.conductor);
         a.bell = address(bell);
         LauncherFactory launcher = new LauncherFactory(a.book, a.bell, a.locker, a.poolDeployer);
         a.launcher = address(launcher);
         bell.setLauncher(a.launcher);
 
-        // ---- seasons ----
+        // ── seasons ──────────────────────────────────────────────────────────────
         SeasonEngine season = new SeasonEngine(a.floor);
         a.season = address(season);
         floor.setBumper(a.season, true);
@@ -202,9 +229,22 @@ contract Deploy is Script {
 
         _write(a);
         console2.log("Deployed PitBosses to chain", block.chainid);
+        if (!useMocks) {
+            console2.log("FlatAMMVault:           ", a.amm);
+            console2.log("ActivationManager:      ", a.activation);
+            console2.log("LoanVault:              ", a.loans);
+            if (a.pit == address(0)) {
+                console2.log("PIT token:              not set — call setPIT() on the three contracts above after Pons graduation");
+            } else {
+                console2.log("PIT token (Pons):       ", a.pit);
+                console2.log("NEXT: transfer PIT allowance to FlatAMMVault for buyer pull-transfers");
+            }
+            console2.log("      fund DegenRoll/RouletteWheel bankrolls via restock()");
+            console2.log("      transfer contract ownership to timelock");
+        }
     }
 
-    // -------- json output --------
+    // ── json output ─────────────────────────────────────────────────────────────
 
     function _write(Addrs memory a) internal {
         string memory o = "deployments";
@@ -237,21 +277,16 @@ contract Deploy is Script {
         console2.log("Wrote", path);
     }
 
-    // -------- env helpers --------
+    // ── env helpers ─────────────────────────────────────────────────────────────
 
     function _envOr(string memory key, address dflt) internal view returns (address) {
-        try vm.envAddress(key) returns (address v) {
-            return v;
-        } catch {
-            return dflt;
-        }
+        try vm.envAddress(key) returns (address v) { return v; }
+        catch { return dflt; }
     }
 
     function _envBool(string memory key, bool dflt) internal view returns (bool) {
-        try vm.envBool(key) returns (bool v) {
-            return v;
-        } catch {
-            return dflt;
-        }
+        try vm.envBool(key) returns (bool v) { return v; }
+        catch { return dflt; }
     }
+
 }

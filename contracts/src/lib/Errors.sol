@@ -27,4 +27,5 @@ library Errors {
     error PermanentLock();
     error BarNotFull();
     error NoLiveTokens();
+    error NotInitialized(); // PIT token not yet wired; call setPIT() first
 }

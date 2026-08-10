@@ -22,12 +22,11 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     PitBoss public immutable boss;
-    IERC20 public immutable pit;
+    IERC20 public pit;
     IHouseBook public houseBook;
 
-    /// @notice Flat $PIT price per Boss. Settable so it can be tuned to the token's
-    ///         total supply — e.g. a launchpad ($PITBOSS on Pons) token whose supply
-    ///         differs from the reference 42M. [CONFIG: default 500,000]
+    /// @notice Flat $PIT price per Boss. Settable so it can be tuned to the Pons
+    ///         graduation supply after launch. [CONFIG: default 500,000]
     uint256 public PRICE_PIT = 500_000 ether;
     /// @notice ETH fee to buy the next Boss. [CONFIG]
     uint256 public buyFee = 0.002 ether;
@@ -47,11 +46,12 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     event FeesSet(uint256 buyFee, uint256 snipeFee);
     event PriceSet(uint256 price);
     event HouseBookSet(address houseBook);
+    event PITSet(address indexed pit);
 
     constructor(address boss_, address pit_, address houseBook_) Ownable(msg.sender) {
-        if (boss_ == address(0) || pit_ == address(0) || houseBook_ == address(0)) revert Errors.ZeroAddress();
+        if (boss_ == address(0) || houseBook_ == address(0)) revert Errors.ZeroAddress();
         boss = PitBoss(boss_);
-        pit = IERC20(pit_);
+        if (pit_ != address(0)) pit = IERC20(pit_);
         houseBook = IHouseBook(houseBook_);
     }
 
@@ -76,6 +76,14 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
         emit HouseBookSet(houseBook_);
     }
 
+    /// @notice Wire the $PIT token after Pons graduation. One-time; reverts if already set.
+    function setPIT(address pit_) external onlyOwner {
+        if (address(pit) != address(0)) revert Errors.InvalidConfig();
+        if (pit_ == address(0)) revert Errors.ZeroAddress();
+        pit = IERC20(pit_);
+        emit PITSet(pit_);
+    }
+
     function setLiquidator(address who, bool allowed) external onlyOwner {
         isLiquidator[who] = allowed;
         emit LiquidatorSet(who, allowed);
@@ -86,6 +94,7 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     /// @notice Buy the next Boss: dispense oldest inventory, else mint a fresh one.
     ///         Costs PRICE_PIT $PIT (approve first) + `buyFee` ETH.
     function buyNext() external payable nonReentrant returns (uint256 tokenId) {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (msg.value < buyFee) revert Errors.InsufficientPayment();
         pit.safeTransferFrom(msg.sender, address(this), PRICE_PIT);
 
@@ -103,6 +112,7 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
 
     /// @notice Snipe a specific in-vault Boss. Costs PRICE_PIT $PIT + `snipeFee` ETH.
     function snipe(uint256 tokenId) external payable nonReentrant {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (msg.value < snipeFee) revert Errors.InsufficientPayment();
         if (boss.ownerOf(tokenId) != address(this)) revert Errors.NotOwner();
         pit.safeTransferFrom(msg.sender, address(this), PRICE_PIT);
