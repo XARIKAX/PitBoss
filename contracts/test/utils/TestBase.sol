@@ -88,7 +88,7 @@ abstract contract TestBase is Test {
         floor.setRewardSink(address(book));
 
         // --- amm ---
-        amm = new FlatAMMVault(address(boss), address(pit), address(book));
+        amm = new FlatAMMVault(address(boss), address(pit), address(book), 500_000 ether);
         boss.setMinter(address(amm), true);
 
         // --- activation ---

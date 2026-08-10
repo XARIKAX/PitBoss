@@ -25,8 +25,9 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     IERC20 public immutable pit;
     IHouseBook public houseBook;
 
-    /// @notice Flat $PIT price per Boss. [CONFIG: 500,000]
-    uint256 public constant PRICE_PIT = 500_000 ether;
+    /// @notice Flat $PIT price per Boss. Set at construction; calibrate against
+    ///         the Pons launch graduation price so 888 Bosses × PRICE_PIT ≤ total supply.
+    uint256 public immutable PRICE_PIT;
     /// @notice ETH fee to buy the next Boss. [CONFIG]
     uint256 public buyFee = 0.002 ether;
     /// @notice ETH fee to snipe a specific in-vault Boss (higher). [CONFIG]
@@ -45,11 +46,13 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     event FeesSet(uint256 buyFee, uint256 snipeFee);
     event HouseBookSet(address houseBook);
 
-    constructor(address boss_, address pit_, address houseBook_) Ownable(msg.sender) {
+    constructor(address boss_, address pit_, address houseBook_, uint256 pricePit_) Ownable(msg.sender) {
         if (boss_ == address(0) || pit_ == address(0) || houseBook_ == address(0)) revert Errors.ZeroAddress();
+        if (pricePit_ == 0) revert Errors.InvalidConfig();
         boss = PitBoss(boss_);
         pit = IERC20(pit_);
         houseBook = IHouseBook(houseBook_);
+        PRICE_PIT = pricePit_;
     }
 
     // -------- admin: fee + recipient only --------

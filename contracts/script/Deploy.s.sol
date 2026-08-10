@@ -26,18 +26,39 @@ import {MockStockToken} from "../src/mocks/MockStockToken.sol";
 import {MockOracle} from "../src/mocks/MockOracle.sol";
 import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
 import {MockEntropyConductor} from "../src/mocks/MockEntropyConductor.sol";
+import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {MinerEntropyConductor} from "../src/pit/entropy/MinerEntropyConductor.sol";
 import {VRFEntropyConductor} from "../src/pit/entropy/VRFEntropyConductor.sol";
-import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {Chains} from "../src/config/Chains.sol";
 
 /// @title Deploy
-/// @notice Idempotent full-system deploy. On local/anvil (or when USE_MOCKS=true) it
+/// @notice Idempotent full-system deploy. On local/anvil (or USE_MOCKS=true) it
 ///         deploys mock stock/oracle/router/entropy so every page works against a
-///         fork; on a real chain it wires the entropy conductor per Chains config
-///         and expects real oracle/router/stock addresses via env. Writes
-///         deployments/deployments.<chainId>.json consumed by the web app + docs.
-/// @dev    Run: forge script script/Deploy.s.sol --rpc-url <url> --broadcast
+///         fork; on a real chain it wires real adapters and the Pons-launched PIT
+///         token. Writes deployments/deployments.<chainId>.json consumed by the
+///         web app and keeper bots.
+///
+/// @dev    Run on mainnet:
+///           1. Deploy adapters first: forge script script/DeployIntegrations.s.sol
+///           2. Launch $PIT on Pons; note the graduated token address.
+///           3. Set env vars and run: forge script script/Deploy.s.sol --broadcast
+///
+///         Mainnet env vars:
+///           PIT_TOKEN         — Pons-graduated $PIT token address (required)
+///           PRICE_PIT         — PIT per Boss in wei (required; e.g. 47000 ether
+///                               for a 42M supply at 888 Bosses × 47,000 PIT)
+///           TREASURY          — receives no PIT on mainnet (Pons handles distribution)
+///           PROTOCOL_RESERVE  — fee split receiver (defaults to deployer)
+///           ROYALTY_RECEIVER  — ERC-2981 receiver (defaults to deployer)
+///           ORACLE            — PythOracleAdapter from DeployIntegrations
+///           SWAP_ROUTER       — UniV3RouterAdapter from DeployIntegrations
+///           POOL_DEPLOYER     — V3PoolDeployerAdapter from DeployIntegrations
+///           STOCK_SAMPLE      — a real tokenized-stock address (first machine)
+///           VRF_COORDINATOR   — Chainlink VRF v2.5 (Base chain only)
+///
+///         Local dev (USE_MOCKS=true or chainId 31337):
+///           All infra is auto-mocked; PIT is deployed locally; PRICE_PIT defaults
+///           to 500,000 ether.
 contract Deploy is Script {
     struct Addrs {
         address pit;
@@ -65,59 +86,71 @@ contract Deploy is Script {
     }
 
     function run() external {
-        address treasury = _envOr("TREASURY", msg.sender);
+        address treasury        = _envOr("TREASURY", msg.sender);
         address protocolReserve = _envOr("PROTOCOL_RESERVE", msg.sender);
-        address royalty = _envOr("ROYALTY_RECEIVER", msg.sender);
-        bool useMocks = _envBool("USE_MOCKS", block.chainid == 31337);
+        address royalty         = _envOr("ROYALTY_RECEIVER", msg.sender);
+        bool    useMocks        = _envBool("USE_MOCKS", block.chainid == 31337);
 
         vm.startBroadcast();
         Addrs memory a;
 
-        // ---- external deps (mocks locally) ----
+        // ── external deps ────────────────────────────────────────────────────────
         if (useMocks) {
-            MockOracle o = new MockOracle();
+            MockOracle o    = new MockOracle();
             MockSwapRouter r = new MockSwapRouter(address(o));
             MockStockToken s = new MockStockToken("Tokenized NVDA", "tNVDA", 18);
             o.setEthPerToken(address(s), 1e15);
             o.setUsdPerEth(3000e8);
-            a.oracle = address(o);
-            a.router = address(r);
+            a.oracle      = address(o);
+            a.router      = address(r);
             a.stockSample = address(s);
-            a.conductor = address(new MockEntropyConductor());
+            a.conductor   = address(new MockEntropyConductor());
+            a.poolDeployer = address(new MockPoolDeployer());
         } else {
-            a.oracle = vm.envAddress("ORACLE");
-            a.router = vm.envAddress("SWAP_ROUTER");
+            a.oracle      = vm.envAddress("ORACLE");
+            a.router      = vm.envAddress("SWAP_ROUTER");
             a.stockSample = vm.envAddress("STOCK_SAMPLE");
-            a.conductor = Chains.entropyKind(block.chainid) == Chains.EntropyKind.Miner
+            a.poolDeployer = vm.envAddress("POOL_DEPLOYER");
+            a.conductor   = Chains.entropyKind(block.chainid) == Chains.EntropyKind.Miner
                 ? address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)))
                 : address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
         }
-        a.poolDeployer = address(new MockPoolDeployer()); // replace with V3 adapter on mainnet
 
-        // ---- token + collection ----
-        a.pit = address(new PIT(treasury));
-        a.account = address(new PitBossAccount());
+        // ── $PIT token ───────────────────────────────────────────────────────────
+        // In mocks mode: deploy PIT locally (treasury receives full supply).
+        // In production: PIT was launched on Pons; pass the graduated address.
+        uint256 pricePit;
+        if (useMocks) {
+            a.pit    = address(new PIT(treasury));
+            pricePit = _envUint("PRICE_PIT", 500_000 ether);
+        } else {
+            a.pit    = vm.envAddress("PIT_TOKEN");
+            pricePit = vm.envUint("PRICE_PIT");  // required — calibrate against Pons supply
+        }
+
+        // ── token-bound accounts + collection ────────────────────────────────────
+        a.account  = address(new PitBossAccount());
         a.registry = address(new InitializingRegistry(a.account));
-        a.boss = address(new PitBoss(a.registry, royalty));
+        a.boss     = address(new PitBoss(a.registry, royalty));
 
-        // ---- floor + book ----
+        // ── floor + book ─────────────────────────────────────────────────────────
         FloorPosition floor = new FloorPosition();
         a.floor = address(floor);
         HouseBook book = new HouseBook(a.boss, a.floor, a.router);
         a.book = address(book);
         floor.setRewardSink(a.book);
 
-        // ---- amm ----
-        FlatAMMVault amm = new FlatAMMVault(a.boss, a.pit, a.book);
+        // ── amm ──────────────────────────────────────────────────────────────────
+        FlatAMMVault amm = new FlatAMMVault(a.boss, a.pit, a.book, pricePit);
         a.amm = address(amm);
         PitBoss(a.boss).setMinter(a.amm, true);
 
-        // ---- activation ----
+        // ── activation ───────────────────────────────────────────────────────────
         ActivationManager activation = new ActivationManager(a.boss, a.pit, a.floor, a.book);
         a.activation = address(activation);
         floor.setBumper(a.activation, true);
 
-        // ---- certificates ----
+        // ── certificates ─────────────────────────────────────────────────────────
         BearerCertificate cert = new BearerCertificate(a.registry, royalty);
         a.certificate = address(cert);
         CertificateCounter counter = new CertificateCounter(a.certificate, a.book, a.oracle, protocolReserve);
@@ -125,7 +158,7 @@ contract Deploy is Script {
         cert.setIssuer(a.counter, true);
         if (useMocks) counter.setRouted(a.stockSample, true);
 
-        // ---- degen roll factory + sample machine ----
+        // ── degen roll factory + sample machine (mocks only) ─────────────────────
         DegenRollFactory factory = new DegenRollFactory(
             DegenRollFactory.Wiring({
                 conductor: a.conductor,
@@ -146,7 +179,7 @@ contract Deploy is Script {
             floor.setBumper(machine, true);
         }
 
-        // ---- roulette factory + sample wheel ----
+        // ── roulette factory + sample wheel (mocks only) ─────────────────────────
         RouletteWheelFactory rFactory = new RouletteWheelFactory(
             RouletteWheelFactory.Wiring({
                 conductor: a.conductor,
@@ -167,20 +200,20 @@ contract Deploy is Script {
             floor.setBumper(wheel, true);
         }
 
-        // ---- locker + loans ----
+        // ── locker + loans ───────────────────────────────────────────────────────
         a.locker = address(new LiquidityLocker(a.book));
         LoanVault loans = new LoanVault(a.boss, a.pit, a.amm, a.book, a.oracle, protocolReserve);
         a.loans = address(loans);
         amm.setLiquidator(a.loans, true);
 
-        // ---- launcher + bell ----
+        // ── launcher + bell ──────────────────────────────────────────────────────
         OpeningBell bell = new OpeningBell(a.conductor);
         a.bell = address(bell);
         LauncherFactory launcher = new LauncherFactory(a.book, a.bell, a.locker, a.poolDeployer);
         a.launcher = address(launcher);
         bell.setLauncher(a.launcher);
 
-        // ---- seasons ----
+        // ── seasons ──────────────────────────────────────────────────────────────
         SeasonEngine season = new SeasonEngine(a.floor);
         a.season = address(season);
         floor.setBumper(a.season, true);
@@ -189,9 +222,17 @@ contract Deploy is Script {
 
         _write(a);
         console2.log("Deployed PitBosses to chain", block.chainid);
+        if (!useMocks) {
+            console2.log("PIT token (Pons):", a.pit);
+            console2.log("PRICE_PIT (wei): ", pricePit);
+            console2.log("FlatAMMVault:    ", a.amm);
+            console2.log("NEXT: transfer PIT allowance to FlatAMMVault for buyer pull-transfers");
+            console2.log("      fund DegenRoll/RouletteWheel bankrolls via restock()");
+            console2.log("      transfer contract ownership to timelock");
+        }
     }
 
-    // -------- json output --------
+    // ── json output ─────────────────────────────────────────────────────────────
 
     function _write(Addrs memory a) internal {
         string memory o = "deployments";
@@ -224,21 +265,20 @@ contract Deploy is Script {
         console2.log("Wrote", path);
     }
 
-    // -------- env helpers --------
+    // ── env helpers ─────────────────────────────────────────────────────────────
 
     function _envOr(string memory key, address dflt) internal view returns (address) {
-        try vm.envAddress(key) returns (address v) {
-            return v;
-        } catch {
-            return dflt;
-        }
+        try vm.envAddress(key) returns (address v) { return v; }
+        catch { return dflt; }
     }
 
     function _envBool(string memory key, bool dflt) internal view returns (bool) {
-        try vm.envBool(key) returns (bool v) {
-            return v;
-        } catch {
-            return dflt;
-        }
+        try vm.envBool(key) returns (bool v) { return v; }
+        catch { return dflt; }
+    }
+
+    function _envUint(string memory key, uint256 dflt) internal view returns (uint256) {
+        try vm.envUint(key) returns (uint256 v) { return v; }
+        catch { return dflt; }
     }
 }

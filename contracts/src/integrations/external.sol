@@ -28,6 +28,43 @@ interface IWETH9 {
     function balanceOf(address owner) external view returns (uint256);
 }
 
+/// @dev Uniswap V3 Factory — used by V3PoolDeployerAdapter to get tick spacing.
+interface IUniV3Factory {
+    function feeAmountTickSpacing(uint24 fee) external view returns (int24);
+}
+
+/// @dev Uniswap V3 NonfungiblePositionManager — pool creation + LP minting surface.
+interface IUniV3PositionManager {
+    struct MintParams {
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 amount0Desired;
+        uint256 amount1Desired;
+        uint256 amount0Min;
+        uint256 amount1Min;
+        address recipient;
+        uint256 deadline;
+    }
+
+    function createAndInitializePoolIfNecessary(
+        address token0,
+        address token1,
+        uint24 fee,
+        uint160 sqrtPriceX96
+    ) external payable returns (address pool);
+
+    function mint(MintParams calldata params)
+        external
+        payable
+        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
+
+    function approve(address to, uint256 tokenId) external;
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;
+}
+
 /// @dev Uniswap V3 SwapRouter02 single-hop exact-input (no deadline arg).
 interface IUniV3Router {
     struct ExactInputSingleParams {
