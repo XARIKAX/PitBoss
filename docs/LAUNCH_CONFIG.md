@@ -22,7 +22,7 @@ and runs the sequence below. Nothing here is guessed — placeholders are marked
 | **USDG** (swap mid-hop) | `setRouteVia(..)` mid | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
 | **ETH/USD feed** (UnstaleWrapper) | `ETH_USD_FEED` | `0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD` |
 | **VRF service** (BlockhashRandomnessServiceV3) | `VRF_SERVICE` | `0x19856b7E4Ab191fC265525E400b9E686f75AE327` |
-| **Uniswap V3 SwapRouter02** | `UNIV3_ROUTER` | `0xcaf681a66d02060134229793863e78c959e5cb2` |
+| **Uniswap V3 SwapRouter02** | `UNIV3_ROUTER` | `0xcaf681a66d020601342297493863e78c959e5cb2` |
 | **Uniswap V3 NonfungiblePositionManager** | `V3_POSITION_MGR` | `0x73991a25c818bf1f1128deaab1492d45638de0d3` |
 | **Uniswap V3 Factory** | `V3_FACTORY` | `0x1f7d7550b1b028f7571e69a784071f0205fd2efa` |
 | **`$PITBOSS`** (Pons launch) | `PIT_TOKEN` | 🔲 *fill after launching on Pons* |
@@ -48,7 +48,7 @@ as a reward until it has a real pool + route; the payout swap would revert.
 WETH=0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73
 ETH_USD_FEED=0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD
 CHAINLINK_MAX_AGE=3600            # seconds; tune to feed heartbeat
-UNIV3_ROUTER=0xcaf681a66d02060134229793863e78c959e5cb2
+UNIV3_ROUTER=0xcaf681a66d020601342297493863e78c959e5cb2
 V3_POSITION_MGR=0x73991a25c818bf1f1128deaab1492d45638de0d3
 V3_FACTORY=0x1f7d7550b1b028f7571e69a784071f0205fd2efa
 VRF_SERVICE=0x19856b7E4Ab191fC265525E400b9E686f75AE327
