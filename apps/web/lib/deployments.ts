@@ -20,6 +20,7 @@ export type DeploymentMap = {
   pit: Address;
   flatAmmVault: Address;
   degenRollFactory: Address;
+  rouletteWheelFactory: Address;
   certificateCounter: Address;
   bearerCertificate: Address;
   houseBook: Address;
@@ -42,6 +43,7 @@ const EMPTY: DeploymentMap = {
   pit: PLACEHOLDER,
   flatAmmVault: PLACEHOLDER,
   degenRollFactory: PLACEHOLDER,
+  rouletteWheelFactory: PLACEHOLDER,
   certificateCounter: PLACEHOLDER,
   bearerCertificate: PLACEHOLDER,
   houseBook: PLACEHOLDER,
@@ -73,6 +75,7 @@ const KEY_MAP: Record<string, keyof DeploymentMap> = {
   BearerCertificate: 'bearerCertificate',
   CertificateCounter: 'certificateCounter',
   DegenRollFactory: 'degenRollFactory',
+  RouletteWheelFactory: 'rouletteWheelFactory',
   EntropyConductor: 'entropyConductor',
   LauncherFactory: 'launcher',
   LiquidityLocker: 'locker',
