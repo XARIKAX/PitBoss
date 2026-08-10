@@ -60,12 +60,22 @@ const config: Config = {
         blink: { '0%,49%': { opacity: '1' }, '50%,100%': { opacity: '0' } },
         pulseDot: { '0%,100%': { opacity: '1' }, '50%': { opacity: '0.35' } },
         scan: { from: { backgroundPosition: '0 0' }, to: { backgroundPosition: '0 -800px' } },
+        stripSweep: {
+          from: { backgroundPosition: '125% 0' },
+          to: { backgroundPosition: '-125% 0' },
+        },
+        digitIn: {
+          from: { opacity: '0.25', transform: 'translateY(-6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         reveal: 'reveal .55s cubic-bezier(.2,.7,.2,1) both',
         ticker: 'ticker 44s linear infinite',
         blink: 'blink 1.1s steps(1) infinite',
         dot: 'pulseDot 1.8s ease-in-out infinite',
+        'strip-sweep': 'stripSweep 6s linear infinite',
+        'digit-in': 'digitIn .35s cubic-bezier(.2,.7,.2,1) both',
       },
     },
   },

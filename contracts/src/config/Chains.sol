@@ -26,13 +26,14 @@ library Chains {
     ///         swappable behind IEntropyConductor for a real VRF later. Chains that
     ///         DO have a coordinator (e.g. Base) use push-model Chainlink VRF v2.5.
     enum EntropyKind {
-        Miner, // blockhash conductor (anvil + Robinhood Chain)
-        ChainlinkVRF // chains with a VRF coordinator (e.g. Base): VRF v2.5
+        Miner, // self-hosted blockhash conductor (local/anvil)
+        ChainlinkVRF, // chains with a VRF coordinator (e.g. Base): VRF v2.5
+        VRFService // external managed IVRFService (Robinhood: BlockhashRandomnessServiceV3, later Pyth)
     }
 
     function entropyKind(uint256 chainId) internal pure returns (EntropyKind) {
         if (chainId == ANVIL_CHAIN_ID) return EntropyKind.Miner;
-        if (chainId == ROBINHOOD_CHAIN_ID) return EntropyKind.Miner;
+        if (chainId == ROBINHOOD_CHAIN_ID) return EntropyKind.VRFService;
         return EntropyKind.ChainlinkVRF;
     }
 

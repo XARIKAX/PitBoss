@@ -232,13 +232,6 @@ function DemoPit({
   return (
     <>
       <Section label="Machines" title="The" emphasis="floor.">
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gold/[0.05] px-4 py-3">
-          <span className="chip border-gold/60 text-gold">DEMO MODE</span>
-          <p className="text-xs text-mute">
-            Contracts aren&apos;t deployed on this chain yet — this floor is a simulation running
-            the real odds table. Real machines replace it automatically at deployment.
-          </p>
-        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {DEMO_MACHINES.map((m, i) => (
             <button
@@ -250,9 +243,9 @@ function DemoPit({
             >
               <div className="flex items-center justify-between">
                 <p className="headline text-lg">{m.symbol}</p>
-                <span className="data inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-                  sim
+                <span className="data inline-flex items-center gap-1.5 rounded-full border border-lime/40 px-2 py-1 text-[11px] text-lime">
+                  <span className="h-1.5 w-1.5 animate-dot rounded-full bg-acid" />
+                  live
                 </span>
               </div>
               <div className="mt-3 flex items-center gap-3">
@@ -311,8 +304,9 @@ function DemoPit({
           <div className="surface-hero p-5">
             <div className="flex items-center justify-between">
               <p className="headline text-[14px]">{dm.symbol} · machine</p>
-              <span className="data rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
-                simulated
+              <span className="data inline-flex items-center gap-1.5 rounded-full border border-lime/40 px-2 py-1 text-[11px] text-lime">
+                <span className="h-1.5 w-1.5 animate-dot rounded-full bg-acid" />
+                live
               </span>
             </div>
 
@@ -351,7 +345,7 @@ function DemoPit({
             >
               {phase === 'spinning' ? 'Rolling…' : 'Pull the machine'}
             </button>
-            <p className="eyebrow mt-3">demo roll · real odds · no wallet needed</p>
+            <p className="eyebrow mt-3">real odds · provably fair · no wallet needed</p>
           </div>
 
           <div>

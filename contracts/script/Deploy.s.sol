@@ -29,6 +29,7 @@ import {MockEntropyConductor} from "../src/mocks/MockEntropyConductor.sol";
 import {MockPoolDeployer} from "../src/mocks/MockPoolDeployer.sol";
 import {MinerEntropyConductor} from "../src/pit/entropy/MinerEntropyConductor.sol";
 import {VRFEntropyConductor} from "../src/pit/entropy/VRFEntropyConductor.sol";
+import {VRFServiceConductor} from "../src/pit/entropy/VRFServiceConductor.sol";
 import {Chains} from "../src/config/Chains.sol";
 
 /// @title Deploy
@@ -44,24 +45,22 @@ import {Chains} from "../src/config/Chains.sol";
 ///           3. Set env vars and run: forge script script/Deploy.s.sol --broadcast
 ///
 ///         Mainnet env vars:
-///           PIT_TOKEN         — Pons-graduated $PIT token address (optional at
-///                               deploy time; set address(0) or omit to wire later
-///                               via FlatAMMVault.setPIT / ActivationManager.setPIT
+///           PIT_TOKEN         — Pons-graduated $PIT token address (optional;
+///                               omit to deploy without PIT and wire later via
+///                               FlatAMMVault.setPIT / ActivationManager.setPIT
 ///                               / LoanVault.setPIT after Pons graduation)
-///           PRICE_PIT         — PIT per Boss in wei (required; e.g. 47000 ether
-///                               for a 42M supply at 888 Bosses × 47,000 PIT)
-///           TREASURY          — receives no PIT on mainnet (Pons handles distribution)
+///           TREASURY          — fee sink (defaults to deployer)
 ///           PROTOCOL_RESERVE  — fee split receiver (defaults to deployer)
 ///           ROYALTY_RECEIVER  — ERC-2981 receiver (defaults to deployer)
-///           ORACLE            — PythOracleAdapter from DeployIntegrations
+///           ORACLE            — ChainlinkOracleAdapter from DeployIntegrations
 ///           SWAP_ROUTER       — UniV3RouterAdapter from DeployIntegrations
 ///           POOL_DEPLOYER     — V3PoolDeployerAdapter from DeployIntegrations
 ///           STOCK_SAMPLE      — a real tokenized-stock address (first machine)
-///           VRF_COORDINATOR   — Chainlink VRF v2.5 (Base chain only)
+///           VRF_SERVICE       — Robinhood Chain IVRFService address
+///           VRF_COORDINATOR   — Chainlink VRF v2.5 coordinator (Base chain only)
 ///
 ///         Local dev (USE_MOCKS=true or chainId 31337):
-///           All infra is auto-mocked; PIT is deployed locally; PRICE_PIT defaults
-///           to 500,000 ether.
+///           All infra is auto-mocked; PIT.sol is deployed locally.
 contract Deploy is Script {
     struct Addrs {
         address pit;
@@ -114,21 +113,26 @@ contract Deploy is Script {
             a.router      = vm.envAddress("SWAP_ROUTER");
             a.stockSample = vm.envAddress("STOCK_SAMPLE");
             a.poolDeployer = vm.envAddress("POOL_DEPLOYER");
-            a.conductor   = Chains.entropyKind(block.chainid) == Chains.EntropyKind.Miner
-                ? address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)))
-                : address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
+            Chains.EntropyKind ek = Chains.entropyKind(block.chainid);
+            if (ek == Chains.EntropyKind.VRFService) {
+                // Robinhood Chain: managed IVRFService. After deploy: the service
+                // owner must setSpinEngine(conductor) and fund it with ETH for fees.
+                a.conductor = address(new VRFServiceConductor(vm.envAddress("VRF_SERVICE"), msg.sender));
+            } else if (ek == Chains.EntropyKind.Miner) {
+                a.conductor = address(new MinerEntropyConductor(Chains.blockTimeMs(block.chainid)));
+            } else {
+                a.conductor = address(new VRFEntropyConductor(vm.envAddress("VRF_COORDINATOR")));
+            }
         }
 
         // ── $PIT token ───────────────────────────────────────────────────────────
-        // In mocks mode: deploy PIT locally (treasury receives full supply).
-        // In production: PIT was launched on Pons; pass the graduated address.
-        uint256 pricePit;
+        // Mocks: deploy PIT.sol locally (treasury receives full supply).
+        // Mainnet: PIT_TOKEN is optional — omit to deploy platform without PIT now
+        //          and wire the Pons-graduated address later via setPIT().
         if (useMocks) {
-            a.pit    = address(new PIT(treasury));
-            pricePit = _envUint("PRICE_PIT", 500_000 ether);
+            a.pit = address(new PIT(treasury));
         } else {
-            a.pit    = _envOr("PIT_TOKEN", address(0)); // optional; wire later via setPIT()
-            pricePit = vm.envUint("PRICE_PIT");  // required — calibrate against Pons supply
+            a.pit = _envOr("PIT_TOKEN", address(0)); // address(0) → deferred via setPIT()
         }
 
         // ── token-bound accounts + collection ────────────────────────────────────
@@ -144,7 +148,7 @@ contract Deploy is Script {
         floor.setRewardSink(a.book);
 
         // ── amm ──────────────────────────────────────────────────────────────────
-        FlatAMMVault amm = new FlatAMMVault(a.boss, a.pit, a.book, pricePit);
+        FlatAMMVault amm = new FlatAMMVault(a.boss, a.pit, a.book);
         a.amm = address(amm);
         PitBoss(a.boss).setMinter(a.amm, true);
 
@@ -226,7 +230,6 @@ contract Deploy is Script {
         _write(a);
         console2.log("Deployed PitBosses to chain", block.chainid);
         if (!useMocks) {
-            console2.log("PRICE_PIT (wei):        ", pricePit);
             console2.log("FlatAMMVault:           ", a.amm);
             console2.log("ActivationManager:      ", a.activation);
             console2.log("LoanVault:              ", a.loans);
@@ -286,8 +289,4 @@ contract Deploy is Script {
         catch { return dflt; }
     }
 
-    function _envUint(string memory key, uint256 dflt) internal view returns (uint256) {
-        try vm.envUint(key) returns (uint256 v) { return v; }
-        catch { return dflt; }
-    }
 }

@@ -21,7 +21,17 @@ export function Footer() {
       <div className="shell py-14">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr]">
           <div>
-            <p className="eyebrow">PitBoss Labs</p>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/icon-64.png"
+                alt="PitBosses logo — the Boss on his throne"
+                width={40}
+                height={40}
+                className="h-10 w-10 rounded-[8px] border border-line [image-rendering:pixelated]"
+              />
+              <p className="eyebrow">PitBoss Labs</p>
+            </div>
             <p className="headline mt-3 max-w-md text-3xl">
               Run the floor. <span className="em">Get paid in stock.</span>
             </p>

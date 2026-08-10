@@ -1,238 +1,346 @@
 # PitBosses — Contract Deployment Handover
 
-Everything a developer needs to deploy the PitBosses protocol to Robinhood
-Chain (staging first, then production). Written against the repo as of this
-commit; every path, env var and command below is real — nothing is
-hand-waved.
+Everything a developer needs to deploy the **entire PitBosses protocol** to
+Robinhood Chain. This document is written against the repo as of this commit —
+every path, env var, address and command is real. Where a value must still be
+supplied by you (a launchpad token address, a router address), it is marked
+🔲 and listed in one place (§10).
+
+> **Read this first, in full, before broadcasting anything.** §8 (before real
+> money) contains the on-chain facts that the repo alone cannot prove — the
+> testnet dry-run is a hard gate, not a nicety.
 
 ---
 
-## 0. TL;DR — fastest safe path
+## 0. TL;DR — the whole system in the right order
 
-1. Create a **fresh deployer wallet**, fund it with a little ETH on Robinhood
-   Chain (chainId **4663**, RPC `https://rpc.mainnet.chain.robinhood.com`).
-2. Add its private key as the GitHub Actions secret **`DEPLOY_PRIVATE_KEY`**
-   (repo → Settings → Secrets and variables → Actions).
-3. Run the **Deploy** workflow (Actions tab → Deploy → Run workflow →
-   network: `robinhood-staging`).
-4. The workflow deploys the full system **with mocked externals**
-   (`USE_MOCKS=true`), writes `contracts/deployments/deployments.4663.json`,
-   and commits it. The Vercel site picks the addresses up on its next build —
-   every page flips from "not deployed" to live automatically.
-5. Read **§6 (post-deploy)** and **§7 (before real money)** before calling it
-   launched. §7 contains a genuine blocker (PIT supply vs AMM price).
+1. **Fund a fresh deployer wallet** with ETH on Robinhood Chain (chainId
+   **4663**, RPC `https://rpc.mainnet.chain.robinhood.com`). Gas is cheap;
+   ~0.1 ETH covers the full system.
+2. **Launch `$PITBOSS` on Pons** (1–2% tax token). Note its address → that is
+   `PIT_TOKEN`.
+3. **Fill the two blanks** (§10): `UNIV3_ROUTER` and `PIT_TOKEN`.
+4. **Deploy the adapters** (`DeployIntegrations.s.sol`) → prints `ORACLE` and
+   `SWAP_ROUTER`.
+5. **Deploy the system** (`Deploy.s.sol`) with those two addresses, `USE_MOCKS=false`.
+6. **Owner wiring** (§6): per-stock feeds + routes, create the games, pair the
+   VRF service, fund the conductor, seed capital.
+7. **Dry-run on chain** (`VerifyIntegrations.s.sol`) — proves feeds + the live
+   `WETH→USDG→stock` swap.
+8. **Commit `deployments/deployments.4663.json`** → the Vercel site flips every
+   page from "not deployed" to live automatically.
+
+There are **two deploy scripts**: adapters first, then the system. That order
+matters — the system consumes the adapters' addresses.
 
 ---
 
 ## 1. Repo layout
 
 ```
-contracts/            Foundry project (Solidity ^0.8.24, OZ v5.6.1)
-  src/                35 contracts (see §3)
-  script/Deploy.s.sol Idempotent full-system deploy + JSON writer
-  test/               28 tests: invariants, EV=0.90 prize table, chi-square
-  deployments/        deployments.<chainId>.json (consumed by the web app)
-  lib/                vendored forge-std 1.16.2 + openzeppelin
-apps/web/             Next.js 14 static export (wagmi v2/viem), Vercel
-apps/keeper/          4 keeper bots (TypeScript/viem, Docker-ready)
-art/                  888-piece collection + generator (pitbosses/)
-docs/                 module docs, network notes, this file
-.github/workflows/    ci.yml (tests + anvil deploy smoke), deploy.yml (manual)
+contracts/                         Foundry project (Solidity ^0.8.24, OZ v5)
+  src/                             47 contracts (see §3)
+  script/DeployIntegrations.s.sol  Chainlink oracle + UniV3 multi-hop router (run 1st)
+  script/Deploy.s.sol              Full-system deploy + JSON writer         (run 2nd)
+  script/VerifyIntegrations.s.sol  On-chain dry-run (oracle read + live swap)
+  test/                            14 suites: invariants, EV=0.90, chi-square, adapters, VRF
+  deployments/                     deployments.<chainId>.json (consumed by the web app)
+apps/web/                          Next.js 14 static export (wagmi v2/viem), Vercel
+apps/keeper/                       fulfill / restock / crank-watch / season-agg (TS/viem, Docker)
+docs/                              LAUNCH_CONFIG.md (addresses), this file, module notes
 ```
 
-- **Tests**: `forge test` — all 28 green in CI. Run them before any deploy.
+- **Tests**: `forge test` — green in CI. Run them before any deploy.
+- **No Foundry?** `node scripts/compile-check.js src,test,script` compiles the
+  whole tree on solc directly. CI runs the full `forge test`.
 - **CI proves the deploy**: every push runs `Deploy.s.sol` against anvil and
-  uploads the resulting JSON (ci.yml `deploy-smoke` job). If that job is
-  green, the script works end-to-end.
+  uploads the resulting JSON. Green = the script wires end-to-end.
 
 ## 2. Prerequisites
 
 - Foundry (`curl -L https://foundry.paradigm.xyz | bash && foundryup`)
-- Node 22 (`npm install` inside `contracts/` pulls solc + helpers)
-- A funded deployer key on the target chain. Gas is cheap on Robinhood
-  Chain; 0.05 ETH is plenty for the full system.
+- Node 20+ (`npm install` inside `contracts/` pulls solc + OZ + erc6551)
+- A funded deployer key on chain 4663
 - Explorer for verification: `https://robinhoodchain.blockscout.com`
 
-## 3. What gets deployed (in order, auto-wired)
+## 3. What gets deployed
 
-`script/Deploy.s.sol` deploys and wires in one broadcast:
+### 3a. Adapters — `DeployIntegrations.s.sol` (run FIRST)
+
+These replace the mocks with Robinhood's real external infrastructure:
+
+| Contract | Role |
+|----------|------|
+| `ChainlinkOracleAdapter` | `IOracle` over **Chainlink Data Feeds** (`AggregatorV3Interface`, 8-dec USD). ETH/USD via the UnstaleWrapper; per-stock feeds added after deploy. Staleness-guarded (`CHAINLINK_MAX_AGE`). |
+| `UniV3RouterAdapter` | ETH→stock swaps over **Uniswap V3**, multi-hop `WETH→USDG→stock` (no direct ETH/stock pools exist). Route set per stock after deploy. |
+
+Prints `ORACLE` and `SWAP_ROUTER` — feed both into the system deploy.
+
+### 3b. System — `Deploy.s.sol` (run SECOND, in one broadcast, auto-wired)
 
 | # | Contract | Role | Wiring done by the script |
 |---|----------|------|---------------------------|
-| 1 | Mocks or real externals | oracle, swap router, sample stock, entropy | see §5 |
-| 2 | `PIT` | ERC-20, 42M fixed supply → `TREASURY` | — |
-| 3 | `PitBossAccount` + `InitializingRegistry` | ERC-6551 implementation + atomic clone/init registry | registry bound to implementation |
-| 4 | `PitBoss` | 888-supply ERC-721, TBA per token | minter = AMM (step 6) |
+| 1 | Externals | oracle / router / entropy | mocks if `USE_MOCKS`, else your `ORACLE`/`SWAP_ROUTER` + the chain's entropy conductor (§4) |
+| 2 | `PIT` **or** `$PITBOSS` | protocol token | uses `PIT_TOKEN` (your Pons token) if set, else deploys reference `PIT.sol` for tests |
+| 3 | `PitBossAccount` + `InitializingRegistry` | ERC-6551 impl + atomic clone/init registry | registry bound to impl |
+| 4 | `PitBoss` | 888-supply ERC-721, TBA per token | minter = AMM |
 | 5 | `FloorPosition` | weight/streak engine | `setRewardSink(HouseBook)` |
-| 6 | `HouseBook` | fee sink + crank | constructor(boss, floor, router) |
-| 7 | `FlatAMMVault` | flat-price NFT AMM (buyNext/snipe) | `PitBoss.setMinter(amm)` |
-| 8 | `ActivationManager` | 500 PIT activation, 50% burn / 50% book | `floor.setBumper(activation)` |
+| 6 | `HouseBook` | single fee sink + crank | constructor(boss, floor, router) |
+| 7 | `FlatAMMVault` | flat-price NFT AMM | `PitBoss.setMinter(amm)`; price is **settable** (`setPrice`) |
+| 8 | `ActivationManager` | Boss activation (50% burn / 50% book) | `floor.setBumper(activation)`; fee **settable** (`setActivationFee`) |
 | 9 | `BearerCertificate` + `CertificateCounter` | stock→deed NFTs, $2 flat fee | `cert.setIssuer(counter)` |
-| 10 | `DegenRollFactory` | creates casino machines | full Wiring struct (conductor, book, oracle, router, cert, boss, activation, floor, reserve) |
-| 11 | `LiquidityLocker` | locks/vests, no admin key | fee share → book |
-| 12 | `LoanVault` | NFT-collateral loans, 15% APR | `amm.setLiquidator(loans)` |
-| 13 | `OpeningBell` + `LauncherFactory` | launchpad + provably-fair bell | `bell.setLauncher(launcher)` |
-| 14 | `SeasonEngine` | quarterly seasons | `floor.setBumper(season)` |
+| 10 | `DegenRollFactory` | creates **Degen Roll** machines | full Wiring struct |
+| 11 | `RouletteWheelFactory` | creates **Roulette** wheels | full Wiring struct |
+| 12 | `LiquidityLocker` | locks/vests, no admin key | fee share → book |
+| 13 | `LoanVault` | NFT-collateral loans, 15% APR | `amm.setLiquidator(loans)` |
+| 14 | `OpeningBell` + `LauncherFactory` | launchpad + provably-fair bell | `bell.setLauncher(launcher)` |
+| 15 | `SeasonEngine` | quarterly seasons | `floor.setBumper(season)` |
 
-With mocks on, the script also creates one **sample machine** (tNVDA) and
-grants it `cert.setIssuer` + `floor.setBumper`.
+With `USE_MOCKS=true` the script also creates one sample Degen Roll machine
+**and** one sample Roulette wheel (tNVDA) and grants each `cert.setIssuer` +
+`floor.setBumper`. With mocks off you create the real games yourself (§6).
 
-Output: `contracts/deployments/deployments.<chainId>.json` with every
-address (PascalCase keys — the web app maps them; don't rename keys).
+Output: `deployments/deployments.<chainId>.json` — PascalCase keys the web app
+maps directly. **Don't rename keys.** `RouletteWheelFactory` is included.
 
-## 4. Environment variables
+## 4. Entropy (randomness) — how it's chosen
 
-All optional on anvil (sender defaults + mocks). For real chains:
+Picked per chain in `src/config/Chains.sol`:
 
-| Var | Required when | Meaning / default |
-|-----|---------------|-------------------|
-| `DEPLOY_PRIVATE_KEY` | GH Actions route | deployer key (repo secret) |
-| `USE_MOCKS` | staging on a real chain | `true` = deploy mock oracle/router/stock/entropy. Defaults true only on 31337 |
-| `TREASURY` | recommended always | receives the full 42M PIT mint. **Defaults to the deployer** |
-| `PROTOCOL_RESERVE` | recommended always | protocol fee share receiver. Defaults to deployer |
-| `ROYALTY_RECEIVER` | recommended always | NFT royalty receiver. Defaults to deployer |
-| `ORACLE` | `USE_MOCKS` unset/false | real price oracle (usdPerEth + ethPerToken per stock) |
-| `SWAP_ROUTER` | `USE_MOCKS` false | real ETH↔stock swap router |
-| `STOCK_SAMPLE` | `USE_MOCKS` false | one real tokenized-stock address (bootstrap machine/routing) |
-| `VRF_COORDINATOR` | non-Robinhood chains only | Chainlink VRF v2.5. Robinhood (4663) uses the Miner conductor instead — no VRF needed |
+| Chain | Entropy conductor | Deployed by |
+|-------|-------------------|-------------|
+| **Robinhood 4663** | `VRFServiceConductor` → your `IVRFService` (`BlockhashRandomnessServiceV3`) | the script, from `VRF_SERVICE` |
+| Base / other | `VRFEntropyConductor` → Chainlink VRF | from `VRF_COORDINATOR` |
+| Anvil 31337 | `MinerEntropyConductor` (blockhash, local only) | the script |
 
-Entropy is picked per chain in `src/config/Chains.sol`: chainId 4663 →
-`MinerEntropyConductor` (deployed by the script), anything else →
-`VRFEntropyConductor(VRF_COORDINATOR)`.
+On Robinhood the conductor **adapts the managed VRF service**. `block.number`
+there is L1-synced (~12s), and `ArbSys.arbBlockHash()` reverts — the service
+handles delivery, so the game never touches raw blockhashes.
 
-## 5. Deploy routes
+Two one-time actions make it live (§6e):
+1. The **VRF service owner** calls `setSpinEngine(<VRFServiceConductor>)` so the
+   conductor is the authorized consumer.
+2. **Fund the conductor with ETH** — it pre-pays `vrfFeeNative()` per request.
 
-### Route A — GitHub Actions (recommended for staging)
+> Swapping to **Pyth Entropy** later is a zero-code change: point `VRF_SERVICE`
+> at the Pyth service and redeploy the conductor. A `PythEntropyService` adapter
+> is already in the tree.
 
-Workflow: `.github/workflows/deploy.yml`, manual-only.
+## 5. Environment variables
 
-1. Add secret `DEPLOY_PRIVATE_KEY` (funded on Robinhood Chain).
-2. Actions → **Deploy** → Run workflow → `robinhood-staging`.
-3. It runs `forge script script/Deploy.s.sol --rpc-url
-   https://rpc.mainnet.chain.robinhood.com --broadcast` with
-   `USE_MOCKS=true`, then **commits `deployments.4663.json` to the branch**.
-4. Vercel rebuilds on that commit → the dApp goes live against the addresses.
+Optional on anvil (sender defaults + mocks). For Robinhood production:
 
-Staging = real chain, real contracts, **mocked oracle/router/stock**, so the
-whole app is playable end-to-end before real integrations land.
+| Var | Required when | Meaning |
+|-----|---------------|---------|
+| `DEPLOY_PRIVATE_KEY` | always (real chain) | funded deployer key |
+| `USE_MOCKS` | set **`false`** for production | `true` deploys mock oracle/router/stock/entropy |
+| **Adapters (`DeployIntegrations`)** | | |
+| `ETH_USD_FEED` | production | Chainlink ETH/USD (UnstaleWrapper) `0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD` |
+| `CHAINLINK_MAX_AGE` | production | max feed staleness, seconds (e.g. `3600`) |
+| `UNIV3_ROUTER` | production 🔲 | Uniswap V3 SwapRouter02 on Robinhood |
+| `WETH` | production | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` |
+| `OWNER` | production | adapter owner (intended: multisig / timelock) |
+| **System (`Deploy`)** | | |
+| `ORACLE` | production | `ChainlinkOracleAdapter` from step 3a |
+| `SWAP_ROUTER` | production | `UniV3RouterAdapter` from step 3a |
+| `STOCK_SAMPLE` | production | one real stock addr to bootstrap (e.g. NVDA) |
+| `VRF_SERVICE` | Robinhood | `0x19856b7E4Ab191fC265525E400b9E686f75AE327` |
+| `PIT_TOKEN` | production 🔲 | `$PITBOSS` (Pons). Omit → deploys reference `PIT.sol` |
+| `TREASURY` | recommended | receives PIT mint (only if no `PIT_TOKEN`). Defaults to deployer |
+| `PROTOCOL_RESERVE` | recommended | protocol fee share receiver. Defaults to deployer |
+| `ROYALTY_RECEIVER` | recommended | NFT royalty receiver. Defaults to deployer |
+| `VRF_COORDINATOR` | non-Robinhood only | Chainlink VRF v2.5 |
 
-### Route B — local forge
+## 6. Deploy sequence (production)
 
+### a) `.env`
 ```bash
-cd contracts && npm install
-
-# staging (mocks) to Robinhood Chain:
-USE_MOCKS=true \
-TREASURY=0x... PROTOCOL_RESERVE=0x... ROYALTY_RECEIVER=0x... \
-forge script script/Deploy.s.sol \
-  --rpc-url https://rpc.mainnet.chain.robinhood.com \
-  --broadcast --private-key $DEPLOY_PRIVATE_KEY
-
-# production (real externals):
-ORACLE=0x... SWAP_ROUTER=0x... STOCK_SAMPLE=0x... \
-TREASURY=0x... PROTOCOL_RESERVE=0x... ROYALTY_RECEIVER=0x... \
-forge script script/Deploy.s.sol \
-  --rpc-url https://rpc.mainnet.chain.robinhood.com \
-  --broadcast --private-key $DEPLOY_PRIVATE_KEY
+# ---- infra (confirmed Robinhood addresses) ----
+WETH=0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73
+ETH_USD_FEED=0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD
+CHAINLINK_MAX_AGE=3600
+VRF_SERVICE=0x19856b7E4Ab191fC265525E400b9E686f75AE327
+UNIV3_ROUTER=0x...        # 🔲 Uniswap V3 SwapRouter02 on Robinhood
+PIT_TOKEN=0x...           # 🔲 $PITBOSS (after Pons launch)
+# ---- ownership (use a multisig for each) ----
+OWNER=0x...
+TREASURY=0x...
+PROTOCOL_RESERVE=0x...
+ROYALTY_RECEIVER=0x...
+USE_MOCKS=false
 ```
 
-Then commit `contracts/deployments/deployments.4663.json` and push — the
-frontend reads addresses from that file at build time
-(`apps/web/lib/deployments.ts`; missing file = placeholder "not deployed"
-states everywhere, which is what the site shows today).
+### b) Deploy adapters, then the system
+```bash
+cd contracts && npm install
+export RPC=https://rpc.mainnet.chain.robinhood.com
 
-## 6. Post-deploy checklist (staging)
+forge script script/DeployIntegrations.s.sol --rpc-url $RPC --broadcast \
+  --private-key $DEPLOY_PRIVATE_KEY
+# copy the printed ChainlinkOracleAdapter / UniV3RouterAdapter into:
+export ORACLE=0x...        # ChainlinkOracleAdapter
+export SWAP_ROUTER=0x...   # UniV3RouterAdapter
+export STOCK_SAMPLE=0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC   # NVDA
 
-1. **Verify contracts** on Blockscout (`forge verify-contract`, verifier
-   `blockscout`, URL `https://robinhoodchain.blockscout.com/api`). Optional
-   but do it — users will read the casino code.
-2. **Frontend live-check**: after the deployments JSON commit builds on
-   Vercel, `/floor` shows AMM buy/snipe, `/pit` swaps the DEMO floor for the
-   real machine grid automatically.
-3. **NFT metadata**: pin `art/pitbosses/images` + `art/pitbosses/metadata`
-   to IPFS, run the CID swap across the metadata (replace `REPLACE_CID`),
-   re-pin metadata, then call `PitBoss.setBaseURI("ipfs://<metadataCID>/")`.
-4. **More machines**: `DegenRollFactory.createMachine(stockToken, creator)`,
-   then for each machine: `BearerCertificate.setIssuer(machine, true)` and
-   `FloorPosition.setBumper(machine, true)` (owner calls; the script did
-   this for the sample machine).
-5. **Certificate routing**: `CertificateCounter.setRouted(stock, true)` per
-   stock that may be sealed into deeds.
-6. **Keeper bots** (`apps/keeper/`, README inside): run at least `fulfill`
-   (entropy) and `crank-watch` (House Book). Docker compose provided; needs
-   an RPC url + a funded keeper key. Everything they do is permissionless —
-   they're convenience, not authority.
-7. **Smoke the money paths with dust**: buy a Boss (needs PIT in the buyer
-   wallet: staging mock stock is faucet-style, PIT comes from `TREASURY`),
-   activate it, buy a pit ticket, settle, sell back, crank the book, take a
-   loan, repay. All eight flows have UI.
+forge script script/Deploy.s.sol --rpc-url $RPC --broadcast \
+  --private-key $DEPLOY_PRIVATE_KEY
+```
 
-## 7. BEFORE real money — decisions & known gaps
+### c) Per reward stock — do BOTH (owner calls)
+For **NVDA, TSLA, AAPL** (§10 has feeds):
+```
+oracle.setTokenFeed(<stock>, <chainlink feed>)
+router.setRouteVia(<stock>, 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168, 3000, 3000)  # USDG mid-hop
+rollFactory.createMachine(<stock>, <creator>)     # Degen Roll table
+rouletteFactory.createWheel(<stock>, <creator>)   # Roulette wheel
+```
+Then register **each** new machine/wheel:
+```
+cert.setIssuer(<game>, true)
+floor.setBumper(<game>, true)
+```
+> **SPCX is intentionally excluded** — no liquidity, never traded. Adding it as
+> a reward would make the payout swap revert. Only add stocks with a proven route.
 
-**(a) BLOCKER — PIT supply vs AMM price.** `PIT.INITIAL_SUPPLY` = 42,000,000
-and `FlatAMMVault.PRICE_PIT` = 500,000 PIT. 888 × 500k = **444M PIT — more
-than 10× the total supply**. At current constants the collection
-mathematically cannot sell out. Pick one before production deploy:
-- lower `PRICE_PIT` (e.g. 40,000 PIT ⇒ 35.5M to sell all 888, tight but
-  possible), or
-- raise supply, or
-- price bosses in ETH instead.
-This is a constant — fix in source, retest (`forge test`), redeploy.
+### d) Global config (owner calls)
+```
+amm.setPrice(<price in $PITBOSS>)               # tune to $PITBOSS supply/decimals
+activation.setActivationFee(<fee in $PITBOSS>)  # tune to $PITBOSS decimals
+counter.setRouted(<stock>, true)                # per stock sealable into a certificate
+```
 
-**(b) AMM ETH fees are placeholder-small** (`buyFee` 0.002 ETH / `snipeFee`
-0.006 ETH, owner-settable at runtime). Reference: StonkBrokers charges
-10–15% of NFT value. Decide the fee schedule; `setFees` can adjust
-post-deploy, no redeploy needed.
+### e) Randomness pairing + fee float (REQUIRED — games won't spin without it)
+```
+BlockhashRandomnessServiceV3.setSpinEngine(<VRFServiceConductor>)   # service owner, one-shot
+send ETH → <VRFServiceConductor>                                    # pre-pays per-request VRF fees
+```
 
-**(c) `MockPoolDeployer` is used even in real mode** (Deploy.s.sol line 93
-— launcher graduation pools). Fine for staging; production launcher
-graduations need a real DEX adapter. Scope: implement `IPoolDeployer`
-against the chain's V3 DEX and pass it to `LauncherFactory`.
+### f) NFT art
+```
+Pin art/pitbosses/images + metadata to IPFS, swap REPLACE_CID, re-pin
+PitBoss.setBaseURI("ipfs://<metadataCID>/")
+```
 
-**(d) Real externals**: production needs real `ORACLE`, `SWAP_ROUTER` and
-tokenized-stock addresses on Robinhood Chain. Staging mocks hide these.
+### g) Seed capital
+```
+$PITBOSS  → FlatAMMVault (so Bosses are buyable) + your distribution plan
+NVDA/TSLA/AAPL → each game's bankroll via stakeBankroll (needs an activated Boss)
+ETH       → deployer + keeper wallets (gas) + VRFServiceConductor (VRF fees)
+```
 
-**(e) Ownership**: every `Ownable` contract is owned by the deployer.
-Before real money: move ownership to a multisig, and decide which setters
-should be renounced vs kept (fees, baseURI, machine creation grants).
+## 7. Dry-run before you trust it — `VerifyIntegrations.s.sol`
 
-**(f) No audit yet.** The suite is strong (invariants incl. reserve
-solvency, EV, chi-square) but this is unaudited money-handling code.
-Treat staging as soft-launch; audit before promoting.
+Proves the two things the repo cannot: that Chainlink feeds return data and the
+`WETH→USDG→stock` route has real liquidity. It reads the oracle, logs the VRF
+fee, and executes a **tiny live swap**.
+```bash
+ORACLE=$ORACLE SWAP_ROUTER=$SWAP_ROUTER \
+STOCK=0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC \
+VRF_SERVICE=$VRF_SERVICE PROBE_ETH=1000000000000000 \
+forge script script/VerifyIntegrations.s.sol --rpc-url $RPC --broadcast \
+  --private-key $DEPLOY_PRIVATE_KEY
+```
+A green run ("VERIFY OK") is your on-chain go/no-go. Run it per stock.
 
-**(g) Legal**: the web app geo-gates (attestation modal) and
-`docs/legal.md` exists — have counsel review for your jurisdictions;
-this is a gambling product paying out in tokenized equities.
+## 8. BEFORE real money — decisions & known gaps
 
-## 8. Ops runbook (once live)
+These are the honest, calibrated caveats. The code is complete, compiles, and
+is unit-tested against mocks — but the following can only be proven on chain:
 
-- **Entropy health**: each machine shows an entropy badge in the UI;
-  `conductor.healthy()` on-chain. If degraded, rolls pause at commit —
-  keeper `fulfill` usually clears it.
-- **House Book**: fills from six fee streams; anyone can `crank()` when the
-  bar is full (cranker gets 0.5%). `crank-watch` automates it profitably.
-- **Machine solvency**: invariant `totalBankrollStock >= totalReserved` is
-  enforced on-chain (50× worst-case reserve per open round). `restock`
-  keeper converts ETH float back into stock inventory.
-- **Redeploys**: the script is re-runnable; each run is a fresh system.
-  Never point the frontend at a mix of two deployments — always take the
-  whole JSON from one run.
+**(a) Testnet dry-run is a hard gate.** Run the full cycle on a Robinhood
+testnet (or a mainnet fork): `commit → requestRandomWord → deliver → wordOf →
+settle`, plus §7's swap probe, before mainnet. Confirm the VRF service actually
+delivers and `wordOf` becomes readable.
 
-## 9. Quick reference
+**(b) `$PITBOSS` is a taxed token (1–2%).** All accounting is fee-on-transfer
+safe (balance-diff, dead-address burn), but confirm on chain: the **decimals and
+supply** of your Pons token, and that `setPrice` / `setActivationFee` are tuned
+to them. A wrong decimals assumption mis-prices every Boss.
+
+**(c) USDG route slippage.** The payout swap is multi-hop through USDG. Verify
+acceptable slippage per stock at realistic sizes — thin USDG↔stock liquidity
+would make wins expensive to settle.
+
+**(d) Stock token decimals.** Adapters assume 18-decimal stock tokens. Confirm
+each reward stock's decimals; a non-18 token needs a normalization pass.
+
+**(e) `MockPoolDeployer` is still used in real mode** (launcher graduation
+pools). Fine for everything except live launchpad graduations — implement
+`IPoolDeployer` against the chain's V3 DEX before enabling real launches. You
+asked for everything working **apart from the launcher**; this is that seam.
+
+**(f) Ownership → multisig.** Every `Ownable` is owned by the deployer at
+first. Before real money, move `OWNER`/adapter/factory/token-setter ownership to
+a multisig (or timelock) and decide which setters to renounce (fees, baseURI,
+game creation) vs keep.
+
+**(g) No external audit yet.** The suite is strong (reserve-solvency invariant,
+EV=0.90, chi-square distribution, adapters, VRF conductor) but this is unaudited
+money code. Audit scope: the taxed `$PITBOSS` paths, both adapters, and
+`VRFServiceConductor`. Treat first mainnet as soft-launch.
+
+**(h) Legal.** Gambling product paying out in tokenized equities. The app
+geo-gates (attestation modal) and `docs/legal.md` exists — have counsel review
+for your jurisdictions.
+
+## 9. Keepers & ops (once live)
+
+Run from `apps/keeper/` (Docker compose, funded hot wallet, RPC + key):
+
+| Bot | Job |
+|-----|-----|
+| `fulfill` | settles both games (Degen Roll + Roulette) once entropy is ready |
+| `restock` | converts each game's ETH float back into stock inventory (both games) |
+| `crank-watch` | cranks the House Book when the bar fills (cranker takes 0.5%) |
+| `season-agg` | season leaderboard aggregation |
+
+Also ensure the **VRF service's own `deliver()` keeper** runs so `wordOf`
+becomes available. Everything keepers do is permissionless — convenience, not
+authority.
+
+- **Entropy health**: `conductor.healthy()` (≥ one VRF fee of ETH). Degraded →
+  rolls pause at commit; settles/refunds always work; unfulfilled pulls refund
+  after 48h.
+- **Machine solvency**: `totalBankrollStock >= totalReserved` enforced on-chain
+  (reserve = notional × worst-case multiplier per open round).
+- **Redeploys**: the script is a fresh system each run — never point the
+  frontend at a mix of two deployments; take the whole JSON from one run.
+
+## 10. Blanks to fill + address reference
+
+**Fill these two:**
+1. `UNIV3_ROUTER` — Uniswap V3 SwapRouter02 on Robinhood Chain.
+2. `PIT_TOKEN` — `$PITBOSS`, after launching on Pons.
+
+**Confirmed addresses (from the Robinhood pack — see `docs/LAUNCH_CONFIG.md`):**
+
+| Purpose | Address |
+|---|---|
+| WETH9 | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` |
+| USDG (swap mid-hop) | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
+| ETH/USD feed (UnstaleWrapper) | `0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD` |
+| VRF service (BlockhashRandomnessServiceV3) | `0x19856b7E4Ab191fC265525E400b9E686f75AE327` |
+| NVDA token / feed | `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` / `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` |
+| TSLA token / feed | `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` / `0x4A1166a659A55625345e9515b32adECea5547C38` |
+| AAPL token / feed | `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` / `0x6B22A786bAa607d76728168703a39Ea9C99f2cD0` |
+
+## 11. Fee & parameter quick reference
 
 | Thing | Value |
 |---|---|
 | Chain | Robinhood Chain, chainId 4663, ETH gas |
-| RPC | `https://rpc.mainnet.chain.robinhood.com` |
-| Explorer | `https://robinhoodchain.blockscout.com` |
-| Fallback chain | Base 8453 (needs `VRF_COORDINATOR`), anvil 31337 for dev |
-| Prize table | 21 rungs, 0.70×–50×, RTP 90% (`src/pit/PrizeTable.sol`, EV test-locked) |
-| Pit edge split | 2.5% creator / 2.5% House Book / 5% protocol |
-| Activation | 500 PIT: 50% burned, 50% House Book |
-| Cert fee | $2 in ETH: 50% book / 50% reserve |
-| Loans | 15% APR (30% late), 70% of interest → book |
-| Launcher | 1% curve fee, 30% of it → Opening Bell, ringer tip 0.5% |
+| RPC / Explorer | `https://rpc.mainnet.chain.robinhood.com` / `https://robinhoodchain.blockscout.com` |
+| Entropy (4663) | `VRFServiceConductor` → `IVRFService` (Blockhash now, Pyth later — no code change) |
+| **Degen Roll** edge | 10% total: 2.5% creator / 2.5% House Book / 5% protocol (RTP 90%) |
+| **Roulette** rake | 2% total: 0.5% creator / 0.5% House Book / 1% protocol (single-zero, 2.70% edge) |
+| Sell-back | 95% of the oracle mark (both games) |
+| Refund window | unfulfilled pull refunds after 48h |
+| Activation | `activationFee` (settable, $PITBOSS): 50% burned / 50% House Book |
+| Certificate fee | $2 in ETH (`feeUsd`, settable): 50% book / 50% reserve |
+| Loans | 15% APR (30% late), NFT collateral, borrow flat AMM principal |
+| Launcher | 1% curve fee, 30% of it → Opening Bell; 20% supply seeds the pool |
 | Crank tip | 0.5% of the pot |
+| AMM Boss price | `PRICE_PIT` (settable via `setPrice`, in $PITBOSS) |
 
-Questions the code answers faster than any doc: `contracts/test/` shows
-every flow working end-to-end, and `docs/modules/` has per-module notes.
+`docs/LAUNCH_CONFIG.md` is the address appendix; `contracts/test/` shows every
+flow working end-to-end; `docs/modules/` has per-module notes.

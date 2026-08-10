@@ -267,13 +267,13 @@ export function DocsBook() {
             wallet. Sell the Boss and the wallet, with everything in it, goes to the buyer.
           </P>
           <P>
-            Bosses trade on a <B>flat-price AMM</B>: a fixed 500,000 $PIT price plus a small ETH
+            Bosses trade on a <B>flat-price AMM</B>: a fixed price in $PITBOSS plus a small ETH
             fee, with two doors — <L>buy next</L> takes whatever's up, <L>snipe</L> pays a higher
             fee to pull a specific Boss out of inventory. No bonding curve on the collection, no
             price discovery games: the scarcity is the 888 cap, not the chart.
           </P>
           <P>
-            A fresh Boss earns nothing. <B>Activation</B> costs 500 $PIT — half is burned forever,
+            A fresh Boss earns nothing. <B>Activation</B> costs $PITBOSS — half is burned forever,
             half goes to the House Book — and switches the Boss onto the floor: it accrues weight,
             builds streaks the longer it stays active, and starts collecting from every crank.
             Transferring a Boss clears activation; the new owner pays to switch it back on. You
@@ -317,10 +317,18 @@ export function DocsBook() {
             no spread on the seal. Lose too many rolls in a row and the machine pays a{' '}
             <B>streak rebate</B> — 10% of your average ticket back, an on-chain tilt cushion.
           </P>
+          <P>
+            <B>Two tables, one floor.</B> Alongside the Degen Roll, the Pit runs a{' '}
+            <B>European single-zero Roulette</B> — bet ETH on a number, colour, dozen or column and
+            settle in the same tokenized stock from the same player-owned bankroll. One green zero
+            is the only edge (a clean 2.70%), and every spin's rake flows to the Bosses like
+            everything else. More tables (crash, plinko, blackjack) plug into the same engine — each
+            one another fee tap for the Bosses.
+          </P>
           <Rule>
-            The floor is law, not policy: the payout table is a pure function baked into the
-            contract, verified by an on-chain EV test. Nobody — including us — can change what a
-            landed roll pays.
+            The floor is law, not policy: every outcome is a pure function of a verifiable random
+            word — the Degen Roll's 21-rung board and Roulette's single-zero wheel alike. Nobody,
+            including us, can change what a landed roll or spin pays.
           </Rule>
         </Chapter>
 
@@ -424,7 +432,7 @@ export function DocsBook() {
         <Chapter id="loans" no="07" kicker="The pawn desk" title={<>Borrow against it. <span className="em">Keep the upside.</span></>}>
           <P>
             Need liquidity without selling your Boss? Post it at the pawn desk. The vault holds
-            the NFT and hands you the <B>full flat principal in $PIT</B> — the same amount for
+            the NFT and hands you the <B>full flat principal in $PITBOSS</B> — the same amount for
             every Boss, no appraisal, no oracle games. You pick the term (3–90 days) and pay the
             interest up front in ETH: <B>15% APR pro-rated to the term</B>, so a 30-day loan costs
             a little over 1%.

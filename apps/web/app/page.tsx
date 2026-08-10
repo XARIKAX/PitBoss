@@ -25,16 +25,22 @@ const MODULES = [
     body: 'Ticket in, stock out. Floor 0.70x, ceiling 50x, RTP 90%. Every roll committed to entropy that does not exist yet.',
   },
   {
+    tag: 'NEW',
+    href: '/roulette',
+    title: 'Roulette',
+    body: 'A European single-zero wheel — bet ETH, win tokenized stock. One green zero, a clean 2.70% edge, paid to the Bosses.',
+  },
+  {
     tag: 'LIVE',
     href: '/certificates',
     title: 'Bearer Certificates',
     body: 'Any listed stock, sealed 1:1 into a numbered deed drawn fully onchain. Redeem burns the note in the same transaction.',
   },
   {
-    tag: 'LIVE',
+    tag: 'SOON',
     href: '/launcher',
     title: 'Launcher',
-    body: 'Fixed price or bonding curve. Every trade charges the Buyback Bar; a provably fair draw rings the Opening Bell.',
+    body: 'Fixed price or bonding curve. Every trade charges the Buyback Bar; a provably fair draw rings the Opening Bell. The bell rings in one week.',
   },
   {
     tag: 'LIVE',
@@ -62,8 +68,9 @@ const HOUSE_SOURCES = [
 const CHIPS = [
   { href: '/floor', label: 'The Floor', live: true },
   { href: '/pit', label: 'The Pit', live: true },
+  { href: '/roulette', label: 'Roulette', live: true },
   { href: '/certificates', label: 'Certificates', live: true },
-  { href: '/launcher', label: 'Launcher', live: true },
+  { href: '/launcher', label: 'Launcher', live: false },
   { href: '/locker', label: 'Locker', live: true },
   { href: '/loans', label: 'Loans', live: true },
   { href: '/seasons', label: 'Seasons', live: false },
@@ -109,7 +116,7 @@ export default function Home() {
               { l: 'House Book', v: '$2.41M', s: 'total accrued' },
               { l: 'Edge', v: '10%', s: 'RTP 90%' },
               { l: 'Bosses', v: '888', s: 'fixed supply' },
-              { l: 'Last bell', v: '+18.2%', s: '$PIT/ACME' },
+              { l: 'Last bell', v: '+18.2%', s: '$PITBOSS/ETH' },
             ].map((x) => (
               <div key={x.l} className="panel-raised px-4 py-3.5">
                 <p className="label">{x.l}</p>
@@ -142,7 +149,7 @@ export default function Home() {
             <span className="inline-block h-px w-5 bg-lime/60" /> The Floor
           </p>
           <h2 className="headline text-h2">
-            Six desks. One pot. <span className="em">Every fee pays you.</span>
+            Seven desks. One pot. <span className="em">Every fee pays you.</span>
           </h2>
         </Reveal>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -150,7 +157,9 @@ export default function Home() {
             <Reveal key={m.title} delay={i * 60}>
               <Link href={m.href} className="panel panel-hover group block h-full p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="chip chip-lime">{m.tag}</span>
+                  <span className={`chip ${m.tag === 'SOON' ? 'border-gold/60 text-gold' : 'chip-lime'}`}>
+                    {m.tag}
+                  </span>
                   <span className="text-dim transition group-hover:translate-x-0.5 group-hover:text-lime">
                     →
                   </span>

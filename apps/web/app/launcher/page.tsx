@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { formatEther, parseEther, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
-import { DemoBanner, Meter, SimBadge } from '@/components/demo';
+import { DemoBanner, Meter } from '@/components/demo';
+import { LaunchHero } from '@/components/LaunchCountdown';
 import { LedBar } from '@/components/viz';
 import { ABIS, readMany, safeRead, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
@@ -122,6 +123,9 @@ export default function LauncherPage() {
         emphasis="Ring the bell."
         lede="Launch a token on a live curve. Curve fees charge the Opening Bell bar — fill it and anyone can ring: a random live launch gets bought back and burned."
       />
+
+      {/* COUNTDOWN — the launcher is the one desk that opens later */}
+      {!launcherLive ? <LaunchHero /> : null}
 
       {/* CREATE WIZARD */}
       <Section label="Create a launch" title="The" emphasis="wizard.">
@@ -573,7 +577,7 @@ function DemoLaunches() {
               {l.graduated ? (
                 <span className="chip border-gold/60 text-gold">graduated 🔔</span>
               ) : (
-                <SimBadge label="live · sim" />
+                <span className="chip border-gold/60 text-gold">at launch</span>
               )}
             </div>
             <svg viewBox="0 0 120 44" className="mt-3 h-16 w-full" aria-hidden>

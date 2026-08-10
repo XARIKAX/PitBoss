@@ -54,6 +54,17 @@ const MOCK_STOCKS: Record<string, Address> = {
   HOOD: PLACEHOLDER,
 };
 
+// Real reward stocks on Robinhood Chain (proven liquidity via WETH→USDG→stock).
+// SPCX is intentionally excluded — no pool, can't be paid out. See docs/LAUNCH_CONFIG.md.
+const ROBINHOOD_STOCKS: Record<string, Address> = {
+  NVDA: '0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC',
+  TSLA: '0x322F0929c4625eD5bAd873c95208D54E1c003b2d',
+  AAPL: '0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9',
+};
+const ROBINHOOD_WETH: Address = '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73';
+/** Swap mid-hop token (WETH→USDG→stock). Exported for reference. */
+export const ROBINHOOD_USDG: Address = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
+
 const robinhoodDeployments = deploymentsFor(ROBINHOOD_CHAIN_ID);
 const baseDeployments = deploymentsFor(BASE_CHAIN_ID);
 const anvilDeployments = deploymentsFor(ANVIL_CHAIN_ID);
@@ -66,13 +77,13 @@ export const CHAINS: Record<number, ChainConfig> = {
     rpcUrl: RPC_ROBINHOOD,
     explorerUrl: 'https://robinhoodchain.blockscout.com',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    wethAddress: robinhoodDeployments.weth,
+    wethAddress: robinhoodDeployments.weth !== PLACEHOLDER ? robinhoodDeployments.weth : ROBINHOOD_WETH,
     oracleAddress: robinhoodDeployments.oracle,
     stockTokens:
       Object.keys(robinhoodDeployments.stockTokens).length > 0
         ? robinhoodDeployments.stockTokens
-        : MOCK_STOCKS,
-    entropyKind: 'miner',
+        : ROBINHOOD_STOCKS,
+    entropyKind: 'vrf',
     deployments: robinhoodDeployments,
   },
   [BASE_CHAIN_ID]: {

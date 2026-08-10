@@ -25,9 +25,9 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     IERC20 public pit;
     IHouseBook public houseBook;
 
-    /// @notice Flat $PIT price per Boss. Set at construction; calibrate against
-    ///         the Pons launch graduation price so 888 Bosses × PRICE_PIT ≤ total supply.
-    uint256 public immutable PRICE_PIT;
+    /// @notice Flat $PIT price per Boss. Settable so it can be tuned to the Pons
+    ///         graduation supply after launch. [CONFIG: default 500,000]
+    uint256 public PRICE_PIT = 500_000 ether;
     /// @notice ETH fee to buy the next Boss. [CONFIG]
     uint256 public buyFee = 0.002 ether;
     /// @notice ETH fee to snipe a specific in-vault Boss (higher). [CONFIG]
@@ -44,16 +44,15 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     event Sniped(address indexed buyer, uint256 indexed tokenId, uint256 ethFee);
     event LiquidatorSet(address indexed who, bool allowed);
     event FeesSet(uint256 buyFee, uint256 snipeFee);
+    event PriceSet(uint256 price);
     event HouseBookSet(address houseBook);
     event PITSet(address indexed pit);
 
-    constructor(address boss_, address pit_, address houseBook_, uint256 pricePit_) Ownable(msg.sender) {
+    constructor(address boss_, address pit_, address houseBook_) Ownable(msg.sender) {
         if (boss_ == address(0) || houseBook_ == address(0)) revert Errors.ZeroAddress();
-        if (pricePit_ == 0) revert Errors.InvalidConfig();
         boss = PitBoss(boss_);
         if (pit_ != address(0)) pit = IERC20(pit_);
         houseBook = IHouseBook(houseBook_);
-        PRICE_PIT = pricePit_;
     }
 
     // -------- admin: fee + recipient only --------
@@ -62,6 +61,13 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
         buyFee = buyFee_;
         snipeFee = snipeFee_;
         emit FeesSet(buyFee_, snipeFee_);
+    }
+
+    /// @notice Set the flat $PIT price per Boss (tune to the token supply).
+    function setPrice(uint256 price) external onlyOwner {
+        if (price == 0) revert Errors.InvalidConfig();
+        PRICE_PIT = price;
+        emit PriceSet(price);
     }
 
     function setHouseBook(address houseBook_) external onlyOwner {
