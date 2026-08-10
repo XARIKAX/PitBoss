@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther, isAddress, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat, PillLink } from '@/components/ui';
@@ -526,11 +526,81 @@ function MyBosses({ owner, chainId }: { owner: Address; chainId: number }) {
   );
 }
 
+/** Full-screen enlargement of a Boss portrait. Backdrop click / X / Escape close. */
+function BossLightbox({
+  id,
+  activated,
+  onClose,
+}: {
+  id: bigint;
+  activated: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-black/85 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`PitBoss #${id.toString()} enlarged`}
+    >
+      <div
+        className="relative w-full max-w-[560px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className={`overflow-hidden rounded-[16px] border-2 ${
+            activated
+              ? 'border-lime/60 shadow-[0_0_80px_-16px_rgba(198,255,0,0.5)]'
+              : 'border-line shadow-[0_40px_120px_-24px_rgba(0,0,0,0.9)]'
+          }`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/bosses/${id.toString()}.png`}
+            alt={`PitBoss #${id.toString()}`}
+            className="aspect-square w-full [image-rendering:pixelated]"
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <div>
+            <p className="headline text-xl">Boss #{id.toString()}</p>
+            <p className="label mt-1">PitBosses · 888 fixed supply · Robinhood Chain</p>
+          </div>
+          {activated ? (
+            <span className="chip chip-lime bg-lime/5">active</span>
+          ) : (
+            <span className="chip">dormant</span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="absolute -right-3 -top-3 grid h-10 w-10 place-items-center rounded-full border border-line bg-black font-mono text-[15px] text-paper transition hover:border-lime/60 hover:text-lime"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number }) {
   const { c } = useContracts();
   const { send, busy } = useTx();
   const info = useBossInfo(id);
   const [dcaToken, setDcaToken] = useState('');
+  const [enlarged, setEnlarged] = useState(false);
 
   const d = info.data;
   const fmt = (v: bigint | null | undefined, suffix = '') =>
@@ -567,32 +637,45 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
   }
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-4">
-        {/* Portrait — the real art for this token id, served from /bosses. */}
+    <div className="card overflow-hidden">
+      {/* Portrait — the real art for this token id; click to enlarge. */}
+      <button
+        onClick={() => setEnlarged(true)}
+        className={`group relative block w-full overflow-hidden rounded-[12px] border transition ${
+          d?.activated
+            ? 'border-lime/50 shadow-[0_0_32px_-8px_rgba(198,255,0,0.4)]'
+            : 'border-line hover:border-lime/40'
+        }`}
+        aria-label={`Enlarge PitBoss #${id.toString()}`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`/bosses/${id.toString()}.png`}
           alt={`PitBoss #${id.toString()}`}
-          width={72}
-          height={72}
-          className={`h-[72px] w-[72px] shrink-0 rounded-[10px] border [image-rendering:pixelated] ${
-            d?.activated
-              ? 'border-lime/50 shadow-[0_0_24px_-6px_rgba(198,255,0,0.45)]'
-              : 'border-line opacity-90'
-          }`}
+          className="aspect-square w-full [image-rendering:pixelated] transition-transform duration-300 group-hover:scale-[1.03]"
         />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between">
-            <p className="headline text-lg">Boss #{id.toString()}</p>
-            {d?.activated == null ? null : d.activated ? (
-              <span className="chip chip-lime bg-lime/5">active</span>
-            ) : (
-              <span className="chip">dormant</span>
-            )}
-          </div>
-          <p className="label mt-1">{d?.activated ? 'On the payroll' : 'Activate to start earning'}</p>
-        </div>
+        {/* status chip over the art */}
+        <span className="absolute right-3 top-3">
+          {d?.activated == null ? null : d.activated ? (
+            <span className="chip chip-lime bg-black/60 backdrop-blur">active</span>
+          ) : (
+            <span className="chip bg-black/60 backdrop-blur">dormant</span>
+          )}
+        </span>
+        {/* zoom hint */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="label">click to enlarge</span>
+          <span className="font-mono text-[13px] text-lime">⤢</span>
+        </span>
+      </button>
+
+      {enlarged ? (
+        <BossLightbox id={id} activated={Boolean(d?.activated)} onClose={() => setEnlarged(false)} />
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between">
+        <p className="headline text-lg">Boss #{id.toString()}</p>
+        <p className="label">{d?.activated ? 'On the payroll' : 'Activate to start earning'}</p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -746,18 +829,26 @@ function ActivateButtons({ id, activated }: { id: bigint; activated: boolean | n
 
 /* ---------------------------------------------------------------- activate */
 
+/** The launch activation fee. The deployed manager predates this config (500);
+ *  until setActivationFee lands on-chain we show the real launch number, then
+ *  track whatever the contract says. */
+const STALE_DEFAULT_FEE = 500n * 10n ** 18n;
+const LAUNCH_ACTIVATION_FEE = '888,888';
+
 function ActivateCard() {
   const { isConnected } = useAccount();
   const { c } = useContracts();
   const fee = useRead<bigint>({ contract: c.activationManager, functionName: 'activationFee' });
+  const feeLabel =
+    fee.data == null || fee.data === STALE_DEFAULT_FEE
+      ? `${LAUNCH_ACTIVATION_FEE} $PITBOSS`
+      : `${formatEther(fee.data)} $PITBOSS`;
 
   return (
     <div className="card">
       <p className="max-w-prose text-sm text-mute">
         A Boss earns nothing until it&apos;s activated. Activation costs{' '}
-        <span className="data text-lime">
-          {fee.data != null ? `${formatEther(fee.data)} PIT` : '…'}
-        </span>{' '}
+        <span className="data text-lime">{feeLabel}</span>{' '}
         and opens it to floor position, streaks and rewards. Use the Activate button on any of your
         Bosses above — approve the fee once, then activate.
       </p>
