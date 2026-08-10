@@ -120,6 +120,7 @@ function FreeMintCard() {
   const { isConnected } = useAccount();
   const { c } = useContracts();
   const { send, busy } = useTx();
+  const [count, setCount] = useState(1);
 
   const minted = useRead<bigint>({ contract: c.pitBoss, functionName: 'totalMinted', refetchInterval: 10_000 });
   const maxSupply = useRead<bigint>({ contract: c.pitBoss, functionName: 'MAX_SUPPLY' });
@@ -128,11 +129,23 @@ function FreeMintCard() {
   const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
   const paused = open.data === false;
 
+  const remaining = minted.data != null && maxSupply.data != null
+    ? Number(maxSupply.data - minted.data)
+    : null;
+  const maxCount = Math.min(10, remaining ?? 10);
+
   async function onMint() {
-    await send(
-      { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
-      { title: 'Mint your Boss' },
-    );
+    if (count === 1) {
+      await send(
+        { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+        { title: 'Mint your Boss' },
+      );
+    } else {
+      await send(
+        { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mintMany', args: [BigInt(count)] },
+        { title: `Mint ${count} Bosses` },
+      );
+    }
     minted.refetch?.();
   }
 
@@ -155,6 +168,29 @@ function FreeMintCard() {
         />
         <Row k="Status" v={soldOut ? 'Sold out' : paused ? 'Paused' : 'Open'} />
       </div>
+
+      {/* Batch count selector */}
+      {!soldOut && !paused && (
+        <div className="mt-4">
+          <p className="eyebrow mb-2">How many?</p>
+          <div className="flex gap-2">
+            {[1, 2, 3, 5, 10].filter((n) => n <= maxCount).map((n) => (
+              <button
+                key={n}
+                onClick={() => setCount(n)}
+                className={`flex-1 rounded-xl border py-2 text-sm font-mono transition-colors ${
+                  count === n
+                    ? 'border-lime bg-lime/10 text-lime'
+                    : 'border-line bg-black/40 text-mute hover:border-lime/50'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onMint}
         disabled={!isConnected || busy || soldOut || paused}
@@ -166,7 +202,9 @@ function FreeMintCard() {
             ? 'Sold out'
             : paused
               ? 'Mint paused'
-              : 'Mint your Boss — free'}
+              : count === 1
+                ? 'Mint your Boss — free'
+                : `Mint ${count} Bosses — free`}
       </button>
     </div>
   );

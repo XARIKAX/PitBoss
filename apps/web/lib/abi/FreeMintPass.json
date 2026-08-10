@@ -6,8 +6,22 @@
   },
   {
     "type": "function",
+    "name": "MAX_BATCH",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "mint",
     "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mintMany",
+    "inputs": [{ "name": "count", "type": "uint256", "internalType": "uint256" }],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -54,5 +68,20 @@
       { "name": "tokenId", "type": "uint256", "indexed": true, "internalType": "uint256" }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BatchTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BatchZero",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MintClosed",
+    "inputs": []
   }
 ]
