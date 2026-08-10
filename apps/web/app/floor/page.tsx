@@ -117,13 +117,32 @@ function BossGallery() {
 /* --------------------------------------------------------------- free mint */
 
 function FreeMintCard() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { c } = useContracts();
   const { send, busy } = useTx();
+  const [qty, setQty] = useState(1);
 
   const minted = useRead<bigint>({ contract: c.pitBoss, functionName: 'totalMinted', refetchInterval: 10_000 });
   const maxSupply = useRead<bigint>({ contract: c.pitBoss, functionName: 'MAX_SUPPLY' });
   const open = useRead<boolean>({ contract: c.freeMintPass, functionName: 'open', refetchInterval: 15_000 });
+  // Batch support probe: only the upgraded pass has MAX_PER_WALLET. On the
+  // single-mint pass this read fails and the stepper locks to 1.
+  const maxPerWallet = useRead<bigint>({ contract: c.freeMintPass, functionName: 'MAX_PER_WALLET' });
+  const remaining = useRead<bigint>({
+    contract: c.freeMintPass,
+    functionName: 'remainingOf',
+    args: address ? [address] : undefined,
+    enabled: Boolean(address) && maxPerWallet.data != null,
+    refetchInterval: 15_000,
+  });
+
+  const batch = maxPerWallet.data != null;
+  const walletMax = batch
+    ? Number(remaining.data ?? maxPerWallet.data ?? 1n)
+    : 1;
+  const maxQty = Math.max(1, Math.min(10, walletMax));
+  const qtyClamped = Math.min(qty, maxQty);
+  const walletTapped = batch && remaining.data != null && remaining.data === 0n;
 
   const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
   const paused = open.data === false;
@@ -134,10 +153,18 @@ function FreeMintCard() {
 
   async function onMint() {
     await send(
-      { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
-      { title: 'Mint your Boss' },
+      batch && qtyClamped > 1
+        ? {
+            address: c.freeMintPass.address,
+            abi: c.freeMintPass.abi,
+            functionName: 'mint',
+            args: [BigInt(qtyClamped)],
+          }
+        : { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+      { title: qtyClamped > 1 ? `Mint ${qtyClamped} Bosses` : 'Mint your Boss' },
     );
     minted.refetch?.();
+    remaining.refetch?.();
   }
 
   return (
@@ -204,9 +231,38 @@ function FreeMintCard() {
 
         {/* ── Right: THE button ── */}
         <div className="flex flex-col items-stretch gap-3">
+          {/* quantity stepper — unlocks to 10 on the batch-capable pass */}
+          {batch && !soldOut && !paused ? (
+            <div className="flex items-center justify-between rounded-[12px] border border-line bg-black/30 px-3 py-2">
+              <button
+                onClick={() => setQty((q) => Math.max(1, Math.min(q, maxQty) - 1))}
+                disabled={qtyClamped <= 1 || busy}
+                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                aria-label="Fewer"
+              >
+                −
+              </button>
+              <div className="text-center">
+                <p className="num font-mono text-[26px] font-bold leading-none text-lime">
+                  {qtyClamped}
+                </p>
+                <p className="label mt-0.5">
+                  {walletTapped ? 'wallet limit reached' : `of ${maxQty} available to you`}
+                </p>
+              </div>
+              <button
+                onClick={() => setQty((q) => Math.min(maxQty, Math.min(q, maxQty) + 1))}
+                disabled={qtyClamped >= maxQty || busy}
+                className="grid h-9 w-9 place-items-center rounded-[8px] border border-line font-mono text-lg text-paper transition hover:border-lime/50 hover:text-lime disabled:opacity-30"
+                aria-label="More"
+              >
+                +
+              </button>
+            </div>
+          ) : null}
           <button
             onClick={onMint}
-            disabled={!isConnected || busy || soldOut || paused}
+            disabled={!isConnected || busy || soldOut || paused || walletTapped}
             className="group relative h-20 overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8ff2e] to-[#a8d900] font-mono text-[17px] font-bold uppercase tracking-[0.12em] text-black shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_18px_50px_-12px_rgba(198,255,0,0.45),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgba(198,255,0,0.6),0_24px_60px_-12px_rgba(198,255,0,0.6),inset_0_1px_0_rgba(255,255,255,0.5)] active:translate-y-0 active:shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_8px_24px_-10px_rgba(198,255,0,0.4)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0"
           >
             {/* shine sweep */}
@@ -231,16 +287,20 @@ function FreeMintCard() {
                 'Sold out — 888 / 888'
               ) : paused ? (
                 'Mint paused'
+              ) : walletTapped ? (
+                'Wallet limit reached — 10 / 10'
               ) : (
                 <>
-                  Mint a Boss
+                  {qtyClamped > 1 ? `Mint ${qtyClamped} Bosses` : 'Mint a Boss'}
                   <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
                 </>
               )}
             </span>
           </button>
           <p className="label text-center">
-            One transaction · NFT + its own wallet · no allowlist, no token, no cost
+            {batch
+              ? 'Up to 10 per wallet, one transaction · NFT + its own wallet · no allowlist, no cost'
+              : 'One transaction · NFT + its own wallet · no allowlist, no token, no cost'}
           </p>
         </div>
       </div>

@@ -144,6 +144,20 @@ cast send $ACTIVATION "setActivationFee(uint256)" 888888000000000000000000 \
 # lends amm.PRICE_PIT() per Boss, and Bosses cost nothing to mint — a funded
 # float could be drained via mint → borrow → default. Leave it unfunded until
 # the loan economics are revisited post-launch.
+
+# ── FreeMintPass upgrade (batch mint, max 10 per wallet) ──
+# The first deployed pass mints 1/tx with NO wallet cap. The repo's current
+# FreeMintPass adds mint(uint256 count) + MAX_PER_WALLET = 10. To upgrade:
+forge create src/nft/FreeMintPass.sol:FreeMintPass \
+  --constructor-args $PITBOSS_NFT --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $PITBOSS_NFT "setMinter(address,bool)" $NEW_PASS true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $PITBOSS_NFT "setMinter(address,bool)" $OLD_PASS false \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+# then: update "FreeMintPass" in deployments.4663.json to $NEW_PASS and commit.
+# The site auto-detects the upgrade (probes MAX_PER_WALLET): old pass = single
+# mint button, new pass = 1–10 stepper. Wallets that minted on the old pass
+# start at 0/10 on the new one.
 ```
 
 ### e) Randomness pairing + fee float (required)
