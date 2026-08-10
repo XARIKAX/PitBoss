@@ -122,14 +122,22 @@ next
 if step; then
   echo ""
   echo "=== 6. DegenRoll: create machines + register as issuer/bumper ==="
+  ZERO=0x0000000000000000000000000000000000000000
   for entry in "${STOCKS[@]}"; do
     STOCK="${entry%%:*}"; SYM="${entry##*:}"
-    echo "  createMachine $SYM"
-    # MachineCreated(address indexed stock, address indexed machine, address indexed creator)
-    TX_JSON=$("${SEND[@]}" "$ROLL_FACTORY" "createMachine(address,address)" \
-      "$STOCK" "$DEPLOYER" --json)
-    MACHINE=$(event_addr "$TX_JSON" "$ROLL_FACTORY")
-    echo "    $SYM machine: $MACHINE"
+    EXISTING=$(cast call "$ROLL_FACTORY" "machineOf(address)(address)" "$STOCK" \
+      --rpc-url "$RPC_URL")
+    if [[ "$EXISTING" != "$ZERO" ]]; then
+      MACHINE="$EXISTING"
+      echo "  $SYM machine already exists: $MACHINE (skipping create)"
+    else
+      echo "  createMachine $SYM"
+      # MachineCreated(address indexed stock, address indexed machine, address indexed creator)
+      TX_JSON=$("${SEND[@]}" "$ROLL_FACTORY" "createMachine(address,address)" \
+        "$STOCK" "$DEPLOYER" --json)
+      MACHINE=$(event_addr "$TX_JSON" "$ROLL_FACTORY")
+      echo "    $SYM machine: $MACHINE"
+    fi
     "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$MACHINE" true
     "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$MACHINE" true
   done
@@ -139,14 +147,22 @@ next
 if step; then
   echo ""
   echo "=== 7. RouletteWheel: create wheels + register as issuer/bumper ==="
+  ZERO=0x0000000000000000000000000000000000000000
   for entry in "${STOCKS[@]}"; do
     STOCK="${entry%%:*}"; SYM="${entry##*:}"
-    echo "  createWheel $SYM"
-    # WheelCreated(address indexed stock, address indexed wheel, address indexed creator)
-    TX_JSON=$("${SEND[@]}" "$ROULETTE_FACTORY" "createWheel(address,address)" \
-      "$STOCK" "$DEPLOYER" --json)
-    WHEEL=$(event_addr "$TX_JSON" "$ROULETTE_FACTORY")
-    echo "    $SYM wheel: $WHEEL"
+    EXISTING=$(cast call "$ROULETTE_FACTORY" "wheelOf(address)(address)" "$STOCK" \
+      --rpc-url "$RPC_URL")
+    if [[ "$EXISTING" != "$ZERO" ]]; then
+      WHEEL="$EXISTING"
+      echo "  $SYM wheel already exists: $WHEEL (skipping create)"
+    else
+      echo "  createWheel $SYM"
+      # WheelCreated(address indexed stock, address indexed wheel, address indexed creator)
+      TX_JSON=$("${SEND[@]}" "$ROULETTE_FACTORY" "createWheel(address,address)" \
+        "$STOCK" "$DEPLOYER" --json)
+      WHEEL=$(event_addr "$TX_JSON" "$ROULETTE_FACTORY")
+      echo "    $SYM wheel: $WHEEL"
+    fi
     "${SEND[@]}" "$CERTIFICATE" "setIssuer(address,bool)" "$WHEEL" true
     "${SEND[@]}" "$FLOOR" "setBumper(address,bool)" "$WHEEL" true
   done
