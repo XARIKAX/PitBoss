@@ -49,7 +49,7 @@ export default function FloorPage() {
         ) : !ammLive ? (
           <EmptyState
             title="Minting opens at launch"
-            hint="Buy and snipe go live here the moment the floor opens — flat price, paid in $PITBOSS, straight from the vault."
+            hint="Buy and snipe go live here the moment the floor opens — minting is free, just a small ETH fee straight to the House Book."
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -192,8 +192,9 @@ function BuyNextCard() {
     enabled: Boolean(address),
   });
 
+  const free = price.data != null && price.data === 0n;
   const needsApprove =
-    price.data != null && (allowance.data == null || allowance.data < price.data);
+    price.data != null && price.data > 0n && (allowance.data == null || allowance.data < price.data);
 
   async function onBuy() {
     if (price.data == null) return;
@@ -224,11 +225,15 @@ function BuyNextCard() {
     <div className="card">
       <p className="headline text-[15px]">Buy off the AMM</p>
       <p className="mt-2 text-sm text-mute">
-        Flat-price vault. Pay the PIT price plus a small ETH fee; the vault mints or hands over the
-        next Boss in inventory.
+        {free
+          ? 'Free mint — no tokens needed. Pay only a small ETH fee and the vault mints or hands over the next Boss in inventory.'
+          : 'Flat-price vault. Pay the $PITBOSS price plus a small ETH fee; the vault mints or hands over the next Boss in inventory.'}
       </p>
       <div className="mt-5 space-y-2 text-sm">
-        <Row k="Price" v={price.data != null ? `${formatEther(price.data)} PIT` : '…'} />
+        <Row
+          k="Price"
+          v={price.data != null ? (free ? 'FREE' : `${formatEther(price.data)} $PITBOSS`) : '…'}
+        />
         <Row k="Buy fee" v={buyFee.data != null ? `Ξ${formatEther(buyFee.data)}` : '…'} />
         <Row
           k="Next up"
@@ -258,8 +263,10 @@ function BuyNextCard() {
         {!isConnected
           ? 'Connect to buy'
           : needsApprove
-            ? `1 · Approve ${price.data != null ? formatEther(price.data) : ''} PIT`
-            : '2 · Buy next Boss'}
+            ? `1 · Approve ${price.data != null ? formatEther(price.data) : ''} $PITBOSS`
+            : free
+              ? 'Mint free Boss'
+              : '2 · Buy next Boss'}
       </button>
     </div>
   );
@@ -281,8 +288,9 @@ function SnipeCard() {
     enabled: Boolean(address),
   });
 
+  const free = price.data != null && price.data === 0n;
   const needsApprove =
-    price.data != null && (allowance.data == null || allowance.data < price.data);
+    price.data != null && price.data > 0n && (allowance.data == null || allowance.data < price.data);
   const idOk = /^\d+$/.test(id.trim());
 
   async function onSnipe() {
@@ -317,7 +325,9 @@ function SnipeCard() {
     <div className="card">
       <p className="headline text-[15px]">Snipe a listing</p>
       <p className="mt-2 text-sm text-mute">
-        Take a specific Boss out of vault inventory — same PIT price, higher ETH fee.
+        {free
+          ? 'Take a specific Boss out of vault inventory — still free, just a higher ETH fee.'
+          : 'Take a specific Boss out of vault inventory — same $PITBOSS price, higher ETH fee.'}
       </p>
       {empty ? (
         <div className="mt-5">

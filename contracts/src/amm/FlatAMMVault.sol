@@ -11,13 +11,17 @@ import {IHouseBook} from "../interfaces/IHouseBook.sol";
 import {Errors} from "../lib/Errors.sol";
 
 /// @title FlatAMMVault
-/// @notice Flat-price primary market for Bosses. Every Boss costs a fixed
-///         PRICE_PIT in $PIT plus an ETH fee. Buy the next Boss out of the vault
-///         (mints a fresh one if inventory is empty and supply remains), or snipe
-///         a specific in-vault id for a higher ETH fee. All ETH fees → House Book.
-/// @dev    The vault's $PIT balance is the flat "AMM principal" that the Loan Vault
-///         lends against and that defaulted Bosses are liquidated into. This
-///         contract holds money ($PIT + transient ETH) — audit-scoped.
+/// @notice Primary market for Bosses. Minting is FREE in tokens — a Boss costs
+///         only the small ETH fee (all ETH fees → House Book). Buy the next Boss
+///         out of the vault (mints a fresh one if inventory is empty and supply
+///         remains), or snipe a specific in-vault id for a higher ETH fee.
+///         PRICE_PIT defaults to 0; setting it non-zero re-enables a flat $PIT
+///         charge per Boss, which is also the principal basis the Loan Vault
+///         lends against (loans idle while the price is 0 — lending against a
+///         free-minted Boss would drain the loan float).
+/// @dev    Free mint composes with deferred token wiring: with PRICE_PIT == 0,
+///         buying works even before setPIT(). This contract holds money
+///         (transient ETH, optionally $PIT) — audit-scoped.
 contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
@@ -25,9 +29,10 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     IERC20 public pit;
     IHouseBook public houseBook;
 
-    /// @notice Flat $PIT price per Boss. Settable so it can be tuned to the Pons
-    ///         graduation supply after launch. [CONFIG: default 500,000]
-    uint256 public PRICE_PIT = 500_000 ether;
+    /// @notice Flat $PIT price per Boss. 0 = free mint (tokens are never pulled).
+    ///         Non-zero re-enables the flat charge and opens the loan desk.
+    ///         [CONFIG: default 0 — free mint]
+    uint256 public PRICE_PIT = 0;
     /// @notice ETH fee to buy the next Boss. [CONFIG]
     uint256 public buyFee = 0.002 ether;
     /// @notice ETH fee to snipe a specific in-vault Boss (higher). [CONFIG]
@@ -63,9 +68,9 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
         emit FeesSet(buyFee_, snipeFee_);
     }
 
-    /// @notice Set the flat $PIT price per Boss (tune to the token supply).
+    /// @notice Set the flat $PIT price per Boss. 0 keeps/restores free mint;
+    ///         non-zero charges tokens per Boss and opens the loan desk.
     function setPrice(uint256 price) external onlyOwner {
-        if (price == 0) revert Errors.InvalidConfig();
         PRICE_PIT = price;
         emit PriceSet(price);
     }
@@ -92,11 +97,11 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     // -------- buy --------
 
     /// @notice Buy the next Boss: dispense oldest inventory, else mint a fresh one.
-    ///         Costs PRICE_PIT $PIT (approve first) + `buyFee` ETH.
+    ///         Free in tokens by default — costs only `buyFee` ETH. If a non-zero
+    ///         PRICE_PIT is configured, also pulls that much $PIT (approve first).
     function buyNext() external payable nonReentrant returns (uint256 tokenId) {
-        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (msg.value < buyFee) revert Errors.InsufficientPayment();
-        pit.safeTransferFrom(msg.sender, address(this), PRICE_PIT);
+        _chargePit();
 
         bool minted;
         if (_invHead < _inventory.length) {
@@ -110,12 +115,12 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
         emit BoughtNext(msg.sender, tokenId, minted, msg.value);
     }
 
-    /// @notice Snipe a specific in-vault Boss. Costs PRICE_PIT $PIT + `snipeFee` ETH.
+    /// @notice Snipe a specific in-vault Boss. Free in tokens by default — costs
+    ///         only `snipeFee` ETH (plus PRICE_PIT $PIT when configured non-zero).
     function snipe(uint256 tokenId) external payable nonReentrant {
-        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (msg.value < snipeFee) revert Errors.InsufficientPayment();
         if (boss.ownerOf(tokenId) != address(this)) revert Errors.NotOwner();
-        pit.safeTransferFrom(msg.sender, address(this), PRICE_PIT);
+        _chargePit();
         _removeFromInventory(tokenId);
         boss.safeTransferFrom(address(this), msg.sender, tokenId);
         _forwardFee(msg.value);
@@ -144,6 +149,14 @@ contract FlatAMMVault is IERC721Receiver, ReentrancyGuard, Ownable {
     }
 
     // -------- internal --------
+
+    /// @dev Pull the flat $PIT price when one is configured. No-op at 0 (free
+    ///      mint) so buying never needs the token wired or approved.
+    function _chargePit() internal {
+        if (PRICE_PIT == 0) return;
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
+        pit.safeTransferFrom(msg.sender, address(this), PRICE_PIT);
+    }
 
     function _forwardFee(uint256 amount) internal {
         houseBook.payFee{value: amount}(IHouseBook.Source.AmmFees);
