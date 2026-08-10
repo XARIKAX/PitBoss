@@ -61,9 +61,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         {/* Brand */}
         <div className="flex h-[var(--topbar-h)] items-center justify-between border-b border-line px-4">
           <Link href="/" onClick={onClose} className="flex items-center gap-2.5">
-            <span className="grid h-7 w-7 place-items-center rounded-[6px] bg-lime font-mono text-sm font-bold text-black">
-              P
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/icon-64.png"
+              alt="PitBosses logo — the Boss on his throne"
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-[6px] border border-line [image-rendering:pixelated]"
+            />
             <span className="font-mono text-[13.5px] font-bold uppercase tracking-[0.08em]">
               Pit<span className="text-lime">Bosses</span>
             </span>
