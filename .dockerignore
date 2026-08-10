@@ -1,0 +1,13 @@
+# Keeper image needs only apps/keeper source — keep the build context tiny.
+.git
+**/node_modules
+**/.next
+**/out
+**/dist
+art
+contracts
+docs
+apps/web
+*.log
+.env
+.env.*
