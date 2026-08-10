@@ -37,10 +37,10 @@ const MODULES = [
     body: 'Any listed stock, sealed 1:1 into a numbered deed drawn fully onchain. Redeem burns the note in the same transaction.',
   },
   {
-    tag: 'LIVE',
+    tag: 'SOON',
     href: '/launcher',
     title: 'Launcher',
-    body: 'Fixed price or bonding curve. Every trade charges the Buyback Bar; a provably fair draw rings the Opening Bell.',
+    body: 'Fixed price or bonding curve. Every trade charges the Buyback Bar; a provably fair draw rings the Opening Bell. The bell rings in one week.',
   },
   {
     tag: 'LIVE',
@@ -70,7 +70,7 @@ const CHIPS = [
   { href: '/pit', label: 'The Pit', live: true },
   { href: '/roulette', label: 'Roulette', live: true },
   { href: '/certificates', label: 'Certificates', live: true },
-  { href: '/launcher', label: 'Launcher', live: true },
+  { href: '/launcher', label: 'Launcher', live: false },
   { href: '/locker', label: 'Locker', live: true },
   { href: '/loans', label: 'Loans', live: true },
   { href: '/seasons', label: 'Seasons', live: false },
@@ -157,7 +157,9 @@ export default function Home() {
             <Reveal key={m.title} delay={i * 60}>
               <Link href={m.href} className="panel panel-hover group block h-full p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="chip chip-lime">{m.tag}</span>
+                  <span className={`chip ${m.tag === 'SOON' ? 'border-gold/60 text-gold' : 'chip-lime'}`}>
+                    {m.tag}
+                  </span>
                   <span className="text-dim transition group-hover:translate-x-0.5 group-hover:text-lime">
                     →
                   </span>

@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { LaunchStrip } from '@/components/LaunchCountdown';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -17,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="bg-field" aria-hidden />
       <Sidebar open={open} onClose={() => setOpen(false)} />
       <div className="flex min-h-screen flex-col lg:pl-[var(--sidebar-w)]">
+        <LaunchStrip />
         <TopBar onMenu={() => setOpen(true)} />
         <main className="flex-1 pb-20">{children}</main>
       </div>

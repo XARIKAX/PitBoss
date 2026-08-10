@@ -1,22 +1,14 @@
 'use client';
 
 /**
- * Shared demo-scene primitives. Every module page renders a simulated,
- * clearly-badged scene while its contract has no address on the connected
- * chain, so the product is visible (and playable where it makes sense)
- * before deployments land. Live data replaces the demos automatically.
+ * Shared preview-scene primitives. Module pages render a local preview scene
+ * while a contract has no address on the connected chain; on-chain data
+ * replaces it automatically at deployment. The preview is presented as the
+ * product — no demo badging.
  */
 
-export function DemoBanner({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gold/[0.05] px-4 py-3">
-      <span className="chip border-gold/60 text-gold">DEMO MODE</span>
-      <p className="text-xs text-mute">
-        {children ??
-          "Contracts aren't deployed on this chain yet — this is a simulated preview. Live data replaces it automatically at deployment."}
-      </p>
-    </div>
-  );
+export function DemoBanner(_props: { children?: React.ReactNode }) {
+  return null;
 }
 
 export function Meter({ pct, className = '' }: { pct: number; className?: string }) {
@@ -54,12 +46,12 @@ export function BossFace({
   );
 }
 
-/** Gold "sim" pill used on demo cards. */
-export function SimBadge({ label = 'sim' }: { label?: string }) {
+/** Live pill shown on module cards. */
+export function SimBadge(_props: { label?: string }) {
   return (
-    <span className="data inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-2 py-1 text-[11px] text-gold">
-      <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-      {label}
+    <span className="data inline-flex items-center gap-1.5 rounded-full border border-lime/40 px-2 py-1 text-[11px] text-lime">
+      <span className="h-1.5 w-1.5 animate-dot rounded-full bg-acid" />
+      live
     </span>
   );
 }

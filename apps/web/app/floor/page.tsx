@@ -41,8 +41,8 @@ export default function FloorPage() {
         <BossGallery />
         {!ammLive ? (
           <EmptyState
-            title="AMM not deployed"
-            hint="The FlatAMMVault has no address on this chain yet. Once deployments land, buying and sniping go live here."
+            title="Minting opens at launch"
+            hint="Buy and snipe go live here the moment the floor opens — flat price, paid in $PITBOSS, straight from the vault."
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -537,7 +537,7 @@ function ActivateCard() {
           How activation works
         </PillLink>
         {!isDeployed(c.activationManager.address) ? (
-          <span className="chip">not deployed on this chain</span>
+          <span className="chip">opens at launch</span>
         ) : !isConnected ? (
           <span className="chip">connect to activate</span>
         ) : null}
