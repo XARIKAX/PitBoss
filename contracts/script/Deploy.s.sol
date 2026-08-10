@@ -111,7 +111,7 @@ contract Deploy is Script {
         } else {
             a.oracle      = vm.envAddress("ORACLE");
             a.router      = vm.envAddress("SWAP_ROUTER");
-            a.stockSample = vm.envAddress("STOCK_SAMPLE");
+            a.stockSample = _envOr("STOCK_SAMPLE", address(0)); // optional; machines created post-deploy
             a.poolDeployer = vm.envAddress("POOL_DEPLOYER");
             Chains.EntropyKind ek = Chains.entropyKind(block.chainid);
             if (ek == Chains.EntropyKind.VRFService) {
