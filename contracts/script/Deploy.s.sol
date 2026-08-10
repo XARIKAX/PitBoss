@@ -234,7 +234,7 @@ contract Deploy is Script {
             console2.log("ActivationManager:      ", a.activation);
             console2.log("LoanVault:              ", a.loans);
             if (a.pit == address(0)) {
-                console2.log("PIT token:              not set — call setPIT() on the three contracts above after Pons graduation");
+                console2.log("PIT token:              not set -- call setPIT() on the three contracts above after Pons graduation");
             } else {
                 console2.log("PIT token (Pons):       ", a.pit);
                 console2.log("NEXT: transfer PIT allowance to FlatAMMVault for buyer pull-transfers");
