@@ -5,7 +5,8 @@
   "description": "PitBosses front end — Run the floor. Get paid in stock.",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/hero-crops.mjs",
+    "prebuild": "node scripts/hero-crops.mjs && node scripts/sync-deployments.mjs",
+    "predev": "node scripts/sync-deployments.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

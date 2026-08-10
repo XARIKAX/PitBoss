@@ -127,6 +127,10 @@ function FreeMintCard() {
 
   const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
   const paused = open.data === false;
+  const supplyPct =
+    minted.data != null && maxSupply.data != null && maxSupply.data > 0n
+      ? Number((minted.data * 10_000n) / maxSupply.data) / 100
+      : 0;
 
   async function onMint() {
     await send(
@@ -137,37 +141,109 @@ function FreeMintCard() {
   }
 
   return (
-    <div className="card max-w-md">
-      <p className="headline text-[15px]">Free Mint</p>
-      <p className="mt-2 text-sm text-mute">
-        Mint a PitBoss NFT — pay only gas. You get a token-bound account and a seat on the floor.
-        Supply is limited to 888.
-      </p>
-      <div className="mt-5 space-y-2 text-sm">
-        <Row k="Price" v="Free (gas only)" />
-        <Row
-          k="Minted"
-          v={
-            minted.data != null && maxSupply.data != null
-              ? `${minted.data.toString()} / ${maxSupply.data.toString()}`
-              : '…'
-          }
-        />
-        <Row k="Status" v={soldOut ? 'Sold out' : paused ? 'Paused' : 'Open'} />
+    <div className="dashed relative overflow-hidden bg-lime/[0.03] p-6 sm:p-9">
+      {/* radial glow behind the desk */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 h-[300px] w-[640px] -translate-x-1/2 rounded-full bg-lime/[0.06] blur-3xl"
+      />
+
+      <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        {/* ── Left: supply telemetry ── */}
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="label-lime flex items-center gap-2">
+              <span className="inline-block h-px w-5 bg-lime/60" /> Free Mint
+            </p>
+            <span className="chip border-gold/60 text-gold">
+              <span className="h-1.5 w-1.5 animate-dot rounded-full bg-gold" />
+              {soldOut ? 'Sold out' : paused ? 'Paused' : 'Live'}
+            </span>
+          </div>
+
+          <h3 className="headline text-h2 mt-3">
+            Mint your Boss. <span className="em">Pay nothing.</span>
+          </h3>
+          <p className="mt-3 max-w-md text-[13px] leading-relaxed text-mute">
+            Free — gas only. Every Boss is born with its own onchain wallet (ERC-6551) and a
+            seat on a floor where every fee pays the holders.
+          </p>
+
+          {/* supply meter */}
+          <div className="mt-6 max-w-md">
+            <div className="flex items-end justify-between">
+              <p className="num font-mono text-[40px] font-bold leading-none text-lime [text-shadow:0_0_18px_rgba(198,255,0,0.45)]">
+                {minted.data != null ? minted.data.toString() : '—'}
+                <span className="text-[20px] text-mute [text-shadow:none]">
+                  {' '}
+                  / {maxSupply.data != null ? maxSupply.data.toString() : '888'}
+                </span>
+              </p>
+              <p className="label">{supplyPct.toFixed(1)}% minted</p>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line2">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-lime to-gold transition-[width] duration-700"
+                style={{ width: `${Math.max(supplyPct, 0.5)}%` }}
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+              {[
+                ['Price', 'FREE · gas only'],
+                ['Supply', '888 · fixed forever'],
+                ['Wallet', 'built into every Boss'],
+              ].map(([k, v]) => (
+                <p key={k} className="text-[11px] text-mute">
+                  <span className="label-lime">{k}</span>{' '}
+                  <span className="font-mono uppercase tracking-wide text-paper">{v}</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: THE button ── */}
+        <div className="flex flex-col items-stretch gap-3">
+          <button
+            onClick={onMint}
+            disabled={!isConnected || busy || soldOut || paused}
+            className="group relative h-20 overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8ff2e] to-[#a8d900] font-mono text-[17px] font-bold uppercase tracking-[0.12em] text-black shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_18px_50px_-12px_rgba(198,255,0,0.45),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgba(198,255,0,0.6),0_24px_60px_-12px_rgba(198,255,0,0.6),inset_0_1px_0_rgba(255,255,255,0.5)] active:translate-y-0 active:shadow-[0_0_0_1px_rgba(198,255,0,0.4),0_8px_24px_-10px_rgba(198,255,0,0.4)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0"
+          >
+            {/* shine sweep */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_35%,rgba(255,255,255,0.5)_50%,transparent_65%)] bg-[length:250%_100%] animate-strip-sweep opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            />
+            {/* scanlines */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.05)_0px,rgba(0,0,0,0.05)_1px,transparent_1px,transparent_3px)]"
+            />
+            <span className="relative flex items-center justify-center gap-3">
+              {busy ? (
+                <>
+                  <span className="h-2 w-2 animate-dot rounded-full bg-black" />
+                  Minting…
+                </>
+              ) : !isConnected ? (
+                'Connect to mint'
+              ) : soldOut ? (
+                'Sold out — 888 / 888'
+              ) : paused ? (
+                'Mint paused'
+              ) : (
+                <>
+                  Mint a Boss
+                  <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+                </>
+              )}
+            </span>
+          </button>
+          <p className="label text-center">
+            One transaction · NFT + its own wallet · no allowlist, no token, no cost
+          </p>
+        </div>
       </div>
-      <button
-        onClick={onMint}
-        disabled={!isConnected || busy || soldOut || paused}
-        className="pill-lime mt-4 w-full disabled:opacity-50"
-      >
-        {!isConnected
-          ? 'Connect to mint'
-          : soldOut
-            ? 'Sold out'
-            : paused
-              ? 'Mint paused'
-              : 'Mint your Boss — free'}
-      </button>
     </div>
   );
 }
