@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ConnectButton } from '@/components/ConnectButton';
+import { SocialLinks } from '@/components/SocialLinks';
 import {
   IconHome,
   IconFloor,
@@ -112,6 +113,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-acid">
               <span className="h-1.5 w-1.5 animate-dot rounded-full bg-acid" /> Online
             </span>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-3">
+            <span className="label">Community</span>
+            <SocialLinks />
           </div>
         </div>
       </aside>

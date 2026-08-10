@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Wordmark } from '@/components/Wordmark';
+import { SocialLinks } from '@/components/SocialLinks';
 
 const NAV = [
   { href: '/floor', label: 'Floor' },
@@ -35,6 +36,7 @@ export function Footer() {
             <p className="headline mt-3 max-w-md text-3xl">
               Run the floor. <span className="em">Get paid in stock.</span>
             </p>
+            <SocialLinks className="mt-5" />
           </div>
           <nav className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             {NAV.map((n) => (
