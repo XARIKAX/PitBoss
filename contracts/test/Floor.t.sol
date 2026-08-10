@@ -64,12 +64,13 @@ contract FloorTest is TestBase {
         assertEq(pit.balanceOf(fresh), 0, "no PIT held");
 
         uint256 bookBefore = address(book).balance;
+        uint256 fee = amm.buyFee(); // hoisted: a view call would consume the prank
         vm.prank(fresh);
-        uint256 id = amm.buyNext{value: amm.buyFee()}();
+        uint256 id = amm.buyNext{value: fee}();
 
         assertEq(boss.ownerOf(id), fresh, "boss minted to buyer");
         assertEq(pit.balanceOf(address(amm)), 0, "no tokens pulled");
-        assertEq(address(book).balance, bookBefore + amm.buyFee(), "ETH fee to book");
+        assertEq(address(book).balance, bookBefore + fee, "ETH fee to book");
     }
 
     /// @dev Setting a non-zero price re-enables the flat token charge.
@@ -77,18 +78,19 @@ contract FloorTest is TestBase {
         amm.setPrice(1_000 ether);
         address buyer = makeAddr("payer");
         vm.deal(buyer, 1 ether);
+        uint256 fee = amm.buyFee(); // hoisted: a view call would consume prank/expectRevert
 
         // No approval → the pull reverts.
         vm.prank(buyer);
         vm.expectRevert();
-        amm.buyNext{value: amm.buyFee()}();
+        amm.buyNext{value: fee}();
 
         // Funded + approved → charged exactly the price.
         vm.prank(treasury);
         pit.transfer(buyer, 1_000 ether);
         vm.startPrank(buyer);
         pit.approve(address(amm), 1_000 ether);
-        uint256 id = amm.buyNext{value: amm.buyFee()}();
+        uint256 id = amm.buyNext{value: fee}();
         vm.stopPrank();
 
         assertEq(boss.ownerOf(id), buyer, "boss minted");
