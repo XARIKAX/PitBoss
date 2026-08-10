@@ -1,0 +1,27 @@
+{
+  "name": "PitBoss #18",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/18.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Casino Green"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit Black Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Mohawk"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    }
+  ]
+}

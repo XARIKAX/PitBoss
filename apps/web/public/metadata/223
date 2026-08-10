@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #223",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/223.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Pale"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Turtleneck"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Purple Fedora"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Rim Glasses"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

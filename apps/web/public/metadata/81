@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #81",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/81.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit White Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Buzzcut"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Face Scar"
+    }
+  ]
+}

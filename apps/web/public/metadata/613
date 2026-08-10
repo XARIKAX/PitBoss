@@ -1,0 +1,27 @@
+{
+  "name": "PitBoss #613",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/613.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Tan"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Afro"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    }
+  ]
+}

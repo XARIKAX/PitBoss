@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #820",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/820.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Neon Pit"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Red Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Grey Slick"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Black Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Earring"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Red Nose"
+    }
+  ]
+}

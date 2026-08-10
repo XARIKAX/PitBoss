@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #503",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/503.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Casino Green"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Dealer Vest"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Afro"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Chain + Earring"
+    }
+  ]
+}

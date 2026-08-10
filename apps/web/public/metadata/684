@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #684",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/684.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Dark"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Red Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Bald"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Purple Gaze"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    }
+  ]
+}

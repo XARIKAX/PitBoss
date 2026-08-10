@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #630",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/630.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Neon Pit"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Dark"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Purple Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Green Messy"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Gold Grill"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Face Scar"
+    }
+  ]
+}

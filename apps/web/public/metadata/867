@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #867",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/867.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Velvet Purple"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Turtleneck"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Green Messy"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Black Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Earring"
+    }
+  ]
+}

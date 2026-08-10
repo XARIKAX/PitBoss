@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #269",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/269.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Olive"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Tuxedo"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Slicked Back"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Black Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigar"
+    }
+  ]
+}

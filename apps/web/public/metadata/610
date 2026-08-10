@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #610",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/610.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Tan"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Dealer Visor"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Rim Glasses"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Chain + Earring"
+    }
+  ]
+}

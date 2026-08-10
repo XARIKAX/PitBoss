@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #216",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/216.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Midnight Blue"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Olive"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit Gold Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Mohawk"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

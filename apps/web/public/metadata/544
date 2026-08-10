@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #544",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/544.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Casino Green"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Dark"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit Gold Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Bald"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Eye Patch"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Chain + Earring"
+    }
+  ]
+}

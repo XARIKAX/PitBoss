@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #755",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/755.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Dark"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Dealer Vest"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Dealer Visor"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Eye Patch"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    }
+  ]
+}

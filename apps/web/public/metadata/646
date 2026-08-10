@@ -1,0 +1,27 @@
+{
+  "name": "PitBoss #646",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/646.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Midnight Blue"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Pale"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit Black Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Red Spiky"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    }
+  ]
+}

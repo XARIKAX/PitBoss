@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #163",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/163.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Casino Green"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit White Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Slicked Back"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Rim Glasses"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Face Scar"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #510",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/510.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Pinstripe Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Curtains"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Purple Gaze"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Earring"
+    }
+  ]
+}

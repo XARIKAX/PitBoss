@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #312",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/312.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Pale"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit Gold Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Black Fedora"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Black Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Earring"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Red Nose"
+    }
+  ]
+}

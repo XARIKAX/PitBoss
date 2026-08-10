@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #841",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/841.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Blood Red"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Green Messy"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Chain + Earring"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Face Scar"
+    }
+  ]
+}

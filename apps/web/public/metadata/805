@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #805",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/805.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Casino Green"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Purple Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Ponytail"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Black Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

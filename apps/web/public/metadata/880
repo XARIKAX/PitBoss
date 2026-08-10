@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #880",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/880.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Blood Red"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Olive"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Turtleneck"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Red Spiky"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

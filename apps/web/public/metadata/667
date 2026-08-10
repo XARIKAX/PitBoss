@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #667",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/667.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Suit Pink Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Dealer Visor"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Rim Glasses"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Earring"
+    }
+  ]
+}

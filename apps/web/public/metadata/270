@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #270",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/270.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Pinstripe Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Backwards Cap"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    }
+  ]
+}

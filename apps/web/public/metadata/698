@@ -1,0 +1,35 @@
+{
+  "name": "PitBoss #698",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/698.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Smoke Brown"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Tan"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Pinstripe Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Slicked Back"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Diamond Chain"
+    }
+  ]
+}

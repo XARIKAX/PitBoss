@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #490",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/490.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Velvet Purple"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Purple Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Ponytail"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Frown"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}

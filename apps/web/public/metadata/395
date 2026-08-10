@@ -1,0 +1,27 @@
+{
+  "name": "PitBoss #395",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/395.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Midnight Blue"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Purple Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Buzzcut"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigarette"
+    }
+  ]
+}

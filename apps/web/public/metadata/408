@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #408",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/408.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Velvet Purple"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Suit Pink Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Bald"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Red Nose"
+    }
+  ]
+}

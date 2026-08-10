@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #778",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/778.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Velvet Purple"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Pale"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Green Tracksuit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Black Fedora"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigar"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Diamond Chain"
+    }
+  ]
+}

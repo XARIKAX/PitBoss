@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #126",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/126.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Midnight Blue"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Turtleneck"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Black Fedora"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Eye Patch"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Cigar"
+    }
+  ]
+}

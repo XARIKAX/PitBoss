@@ -1,0 +1,39 @@
+{
+  "name": "PitBoss #616",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/616.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Charcoal"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Brown"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Black Suit White Tie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Durag"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Purple Gaze"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Smirk"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Diamond Chain"
+    },
+    {
+      "trait_type": "Extra",
+      "value": "Red Nose"
+    }
+  ]
+}

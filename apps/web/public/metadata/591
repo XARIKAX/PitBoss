@@ -1,0 +1,31 @@
+{
+  "name": "PitBoss #591",
+  "description": "888 bosses running the pit. PitBosses genesis collection.",
+  "image": "https://www.pitbosses.xyz/bosses/591.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Blood Red"
+    },
+    {
+      "trait_type": "Skin",
+      "value": "Fair"
+    },
+    {
+      "trait_type": "Clothing",
+      "value": "Pinstripe Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Buzzcut"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Neutral"
+    },
+    {
+      "trait_type": "Jewelry",
+      "value": "Gold Chain"
+    }
+  ]
+}
