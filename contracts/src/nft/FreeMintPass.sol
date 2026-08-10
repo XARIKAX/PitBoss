@@ -14,13 +14,13 @@ interface IPitBossNFT {
 ///         previous pass).
 ///         When $PIT launches: setOpen(false), hand minting back to FlatAMMVault.
 contract FreeMintPass is Ownable {
-    IPitBossNFT public immutable pitBoss;
-    bool public open;
-
     /// @notice Free-mint allowance per wallet, batchable in one tx. [CONFIG: 10]
     uint256 public constant MAX_PER_WALLET = 10;
     /// @notice Free mints already taken per wallet.
     mapping(address => uint256) public mintedBy;
+
+    IPitBossNFT public immutable pitBoss;
+    bool public open;
 
     event Minted(address indexed to, uint256 indexed tokenId);
 
@@ -33,7 +33,7 @@ contract FreeMintPass is Ownable {
         open = true;
     }
 
-    /// @notice Mint one Boss (kept for compatibility with the single-mint UI).
+    /// @notice Mint one Boss (single-mint UI compatibility).
     function mint() external {
         _mintMany(msg.sender, 1);
     }

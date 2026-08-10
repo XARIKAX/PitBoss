@@ -12,10 +12,31 @@
   },
   {
     "type": "function",
+    "name": "MAX_PER_WALLET",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "mint",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mint",
+    "inputs": [{ "name": "count", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mintedBy",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -54,6 +75,13 @@
         "internalType": "address"
       }
     ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "remainingOf",
+    "inputs": [{ "name": "who", "type": "address", "internalType": "address" }],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"
   },
   {
@@ -102,58 +130,18 @@
     "anonymous": false
   },
   {
-    "type": "function",
-    "name": "mint",
-    "inputs": [
-      {
-        "name": "count",
-        "type": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "type": "error",
+    "name": "InvalidCount",
+    "inputs": []
   },
   {
-    "type": "function",
-    "name": "MAX_PER_WALLET",
-    "inputs": [],
-    "outputs": [
-      {
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "type": "error",
+    "name": "MintClosed",
+    "inputs": []
   },
   {
-    "type": "function",
-    "name": "mintedBy",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "remainingOf",
-    "inputs": [
-      {
-        "name": "who",
-        "type": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "type": "error",
+    "name": "WalletLimit",
+    "inputs": []
   }
 ]
