@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # Post-deploy wiring script for PitBoss on Robinhood Chain (chainId 4663).
-# Run from the contracts/ directory after sourcing your .env:
-#   cd contracts && source .env && bash script/wire.sh
+# Run from the contracts/ directory:
+#   cd contracts && bash script/wire.sh
 # Requirements: cast (Foundry ≥ 0.2), jq
 
 set -euo pipefail
 
+# ── Load .env (auto-export so subshell inherits) ─────────────────────────────
+if [[ -f .env ]]; then
+  set -a; source .env; set +a
+fi
+
 # ── Validate env ─────────────────────────────────────────────────────────────
-: "${RPC_URL:?RPC_URL not set — source .env first}"
-: "${PRIVATE_KEY:?PRIVATE_KEY not set — source .env first}"
+: "${RPC_URL:?RPC_URL not set — add it to .env}"
+: "${PRIVATE_KEY:?PRIVATE_KEY not set — add it to .env}"
 
 SEND=(cast send --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY")
 
