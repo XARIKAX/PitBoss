@@ -44,7 +44,10 @@ import {Chains} from "../src/config/Chains.sol";
 ///           3. Set env vars and run: forge script script/Deploy.s.sol --broadcast
 ///
 ///         Mainnet env vars:
-///           PIT_TOKEN         — Pons-graduated $PIT token address (required)
+///           PIT_TOKEN         — Pons-graduated $PIT token address (optional at
+///                               deploy time; set address(0) or omit to wire later
+///                               via FlatAMMVault.setPIT / ActivationManager.setPIT
+///                               / LoanVault.setPIT after Pons graduation)
 ///           PRICE_PIT         — PIT per Boss in wei (required; e.g. 47000 ether
 ///                               for a 42M supply at 888 Bosses × 47,000 PIT)
 ///           TREASURY          — receives no PIT on mainnet (Pons handles distribution)
@@ -124,7 +127,7 @@ contract Deploy is Script {
             a.pit    = address(new PIT(treasury));
             pricePit = _envUint("PRICE_PIT", 500_000 ether);
         } else {
-            a.pit    = vm.envAddress("PIT_TOKEN");
+            a.pit    = _envOr("PIT_TOKEN", address(0)); // optional; wire later via setPIT()
             pricePit = vm.envUint("PRICE_PIT");  // required — calibrate against Pons supply
         }
 
@@ -223,10 +226,16 @@ contract Deploy is Script {
         _write(a);
         console2.log("Deployed PitBosses to chain", block.chainid);
         if (!useMocks) {
-            console2.log("PIT token (Pons):", a.pit);
-            console2.log("PRICE_PIT (wei): ", pricePit);
-            console2.log("FlatAMMVault:    ", a.amm);
-            console2.log("NEXT: transfer PIT allowance to FlatAMMVault for buyer pull-transfers");
+            console2.log("PRICE_PIT (wei):        ", pricePit);
+            console2.log("FlatAMMVault:           ", a.amm);
+            console2.log("ActivationManager:      ", a.activation);
+            console2.log("LoanVault:              ", a.loans);
+            if (a.pit == address(0)) {
+                console2.log("PIT token:              not set — call setPIT() on the three contracts above after Pons graduation");
+            } else {
+                console2.log("PIT token (Pons):       ", a.pit);
+                console2.log("NEXT: transfer PIT allowance to FlatAMMVault for buyer pull-transfers");
+            }
             console2.log("      fund DegenRoll/RouletteWheel bankrolls via restock()");
             console2.log("      transfer contract ownership to timelock");
         }

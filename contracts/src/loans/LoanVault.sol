@@ -35,7 +35,7 @@ contract LoanVault is ReentrancyGuard, Ownable {
     }
 
     IPitBoss public immutable boss;
-    IERC20 public immutable pit;
+    IERC20 public pit;
     FlatAMMVault public immutable amm;
     IHouseBook public houseBook;
     IOracle public oracle;
@@ -57,14 +57,15 @@ contract LoanVault is ReentrancyGuard, Ownable {
     event Repaid(uint256 indexed loanId, uint256 principal, uint256 lateFeeEth);
     event Liquidated(uint256 indexed loanId, uint256 bossId);
     event Funded(uint256 amount);
+    event PITSet(address indexed pit);
 
     constructor(address boss_, address pit_, address amm_, address houseBook_, address oracle_, address protocolReserve_)
         Ownable(msg.sender)
     {
-        if (boss_ == address(0) || pit_ == address(0) || amm_ == address(0) || houseBook_ == address(0)
+        if (boss_ == address(0) || amm_ == address(0) || houseBook_ == address(0)
             || oracle_ == address(0) || protocolReserve_ == address(0)) revert Errors.ZeroAddress();
         boss = IPitBoss(boss_);
-        pit = IERC20(pit_);
+        if (pit_ != address(0)) pit = IERC20(pit_);
         amm = FlatAMMVault(amm_);
         houseBook = IHouseBook(houseBook_);
         oracle = IOracle(oracle_);
@@ -83,9 +84,18 @@ contract LoanVault is ReentrancyGuard, Ownable {
         minFee = minFee_;
     }
 
+    /// @notice Wire the $PIT token after Pons graduation. One-time; reverts if already set.
+    function setPIT(address pit_) external onlyOwner {
+        if (address(pit) != address(0)) revert Errors.InvalidConfig();
+        if (pit_ == address(0)) revert Errors.ZeroAddress();
+        pit = IERC20(pit_);
+        emit PITSet(pit_);
+    }
+
     /// @notice Fund the lendable $PIT float. Owner-only; this is protocol liquidity,
     ///         not borrower or player funds.
     function fund(uint256 amount) external onlyOwner {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         pit.safeTransferFrom(msg.sender, address(this), amount);
         emit Funded(amount);
     }
@@ -98,6 +108,7 @@ contract LoanVault is ReentrancyGuard, Ownable {
 
     /// @notice Upfront ETH fee for a loan of `term` seconds.
     function quoteFee(uint64 term) public view returns (uint256 feeEth, uint256 ethNotional) {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         uint256 pxEthPerPit = oracle.ethPerToken(address(pit)); // eth-wei per 1e18 PIT
         ethNotional = (principalPit() * pxEthPerPit) / 1e18;
         uint256 apr = (ethNotional * APR_BPS * term) / (10_000 * 365 days);
@@ -107,6 +118,7 @@ contract LoanVault is ReentrancyGuard, Ownable {
     // -------- borrow / repay / liquidate --------
 
     function borrow(uint256 bossId, uint64 term) external payable nonReentrant returns (uint256 loanId) {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (boss.ownerOf(bossId) != msg.sender) revert Errors.NotOwner();
         if (term < MIN_TERM) revert Errors.InvalidConfig();
 
@@ -148,6 +160,7 @@ contract LoanVault is ReentrancyGuard, Ownable {
 
     /// @notice Repay exact principal (+ late fee if overdue) and reclaim the Boss.
     function repay(uint256 loanId) external payable nonReentrant {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         Loan storage l = loans[loanId];
         if (l.closed) revert Errors.RoundAlreadySettled();
         if (l.borrower != msg.sender) revert Errors.NotOwner();

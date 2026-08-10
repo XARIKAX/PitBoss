@@ -20,7 +20,7 @@ contract ActivationManager is IActivationManager, Ownable {
     using SafeERC20 for IERC20;
 
     IPitBoss public immutable pitBoss;
-    ERC20Burnable public immutable pit;
+    ERC20Burnable public pit;
     FloorPosition public immutable floor;
     address public houseBook; // parks the non-burned $PIT share
 
@@ -41,11 +41,12 @@ contract ActivationManager is IActivationManager, Ownable {
     event Deactivated(uint256 indexed tokenId);
     event ActivationFeeSet(uint256 fee);
     event HouseBookSet(address houseBook);
+    event PITSet(address indexed pit);
 
     constructor(address pitBoss_, address pit_, address floor_, address houseBook_) Ownable(msg.sender) {
-        if (pitBoss_ == address(0) || pit_ == address(0) || floor_ == address(0)) revert Errors.ZeroAddress();
+        if (pitBoss_ == address(0) || floor_ == address(0)) revert Errors.ZeroAddress();
         pitBoss = IPitBoss(pitBoss_);
-        pit = ERC20Burnable(pit_);
+        if (pit_ != address(0)) pit = ERC20Burnable(pit_);
         floor = FloorPosition(floor_);
         houseBook = houseBook_;
     }
@@ -63,11 +64,20 @@ contract ActivationManager is IActivationManager, Ownable {
         emit HouseBookSet(houseBook_);
     }
 
+    /// @notice Wire the $PIT token after Pons graduation. One-time; reverts if already set.
+    function setPIT(address pit_) external onlyOwner {
+        if (address(pit) != address(0)) revert Errors.InvalidConfig();
+        if (pit_ == address(0)) revert Errors.ZeroAddress();
+        pit = ERC20Burnable(pit_);
+        emit PITSet(pit_);
+    }
+
     // -------- activation --------
 
     /// @notice Activate a Boss. Caller must own it and have approved `activationFee`
     ///         of $PIT. 50% is burned, 50% parked at the House Book.
     function activate(uint256 tokenId) external {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
         if (pitBoss.ownerOf(tokenId) != msg.sender) revert Errors.NotOwner();
         State storage s = _state[tokenId];
         if (_isFresh(tokenId, s)) revert Errors.AlreadyActivated();
