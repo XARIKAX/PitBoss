@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Reveal } from '@/components/Reveal';
 import { OddsTable } from '@/components/OddsTable';
 import { HeroBanner } from '@/components/HeroBanner';
+import { TokenAddress } from '@/components/TokenAddress';
 
 /**
  * Home — terminal-trading dashboard.
@@ -108,6 +109,9 @@ export default function Home() {
             <p className="label mt-6">
               Provably fair · Paid in real stock · Never lose more than 30%
             </p>
+            <div className="mt-4">
+              <TokenAddress compact />
+            </div>
           </div>
 
           {/* Stat rail */}
