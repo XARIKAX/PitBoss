@@ -1,7 +1,12 @@
 # PitBosses — Launch Config (Robinhood Chain, 4663)
 
-Real, verified addresses from the Robinhood pack. Your dev fills the **two blanks**
-(🔲) and runs the sequence below. Nothing here is guessed — placeholders are marked.
+Real, verified addresses from the Robinhood pack. Your dev fills the **🔲 blanks**
+and runs the sequence below. Nothing here is guessed — placeholders are marked.
+
+> **PIT token is deferred.** The platform deploys with `pit = address(0)` in
+> FlatAMMVault, ActivationManager, and LoanVault. After `$PITBOSS` graduates on
+> Pons, call `setPIT(<pons_address>)` on each of those three contracts to wire it.
+> No redeployment needed.
 
 > ⚠️ Randomness is `BlockhashRandomnessServiceV3` (`PRODUCTION_SAFE = false`,
 > bootstrap-grade). Swap to Pyth Entropy later with **zero code change** — just point
@@ -17,7 +22,9 @@ Real, verified addresses from the Robinhood pack. Your dev fills the **two blank
 | **USDG** (swap mid-hop) | `setRouteVia(..)` mid | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
 | **ETH/USD feed** (UnstaleWrapper) | `ETH_USD_FEED` | `0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD` |
 | **VRF service** (BlockhashRandomnessServiceV3) | `VRF_SERVICE` | `0x19856b7E4Ab191fC265525E400b9E686f75AE327` |
-| **Uniswap V3 SwapRouter02** | `UNIV3_ROUTER` | 🔲 *fill from Uniswap · Robinhood deployments* |
+| **Uniswap V3 SwapRouter02** | `UNIV3_ROUTER` | 🔲 *look up at explorer.robinhood.com or docs.uniswap.org/contracts/v3/reference/deployments* |
+| **Uniswap V3 NonfungiblePositionManager** | `V3_POSITION_MGR` | 🔲 *same source as above* |
+| **Uniswap V3 Factory** | `V3_FACTORY` | 🔲 *same source as above* |
 | **`$PITBOSS`** (Pons launch) | `PIT_TOKEN` | 🔲 *fill after launching on Pons* |
 
 ## 2. Reward stocks (proven liquidity — `WETH → USDG → stock`, both 0.3%)
@@ -42,6 +49,8 @@ WETH=0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73
 ETH_USD_FEED=0x9F738359CF9A3630d08a79d80dE1aB803Cb2f7dD
 CHAINLINK_MAX_AGE=3600            # seconds; tune to feed heartbeat
 UNIV3_ROUTER=0x...                # 🔲 Uniswap V3 SwapRouter02
+V3_POSITION_MGR=0x...             # 🔲 Uniswap V3 NonfungiblePositionManager
+V3_FACTORY=0x...                  # 🔲 Uniswap V3 Factory
 VRF_SERVICE=0x19856b7E4Ab191fC265525E400b9E686f75AE327
 PIT_TOKEN=0x...                   # 🔲 $PITBOSS (Pons)
 OWNER=0x...                       # multisig (adapter/oracle owner)
@@ -52,34 +61,89 @@ USE_MOCKS=false
 ```
 
 ### b) Deploy the adapters, then the system
+
+> Run from the `contracts/` directory with `--private-key $PRIVATE_KEY` or a
+> hardware wallet flag (`--ledger`, `--trezor`).
+
 ```bash
-forge script script/DeployIntegrations.s.sol --rpc-url $RPC --broadcast   # → ORACLE, SWAP_ROUTER
-# set ORACLE / SWAP_ROUTER from the output, then:
-forge script script/Deploy.s.sol --rpc-url $RPC --broadcast
+cd contracts
+
+# Step 1 — adapters (Chainlink oracle, Uni V3 router, V3 pool deployer)
+forge script script/DeployIntegrations.s.sol \
+  --rpc-url $RPC_URL --broadcast --verify
+
+# The script prints three addresses.  Add them to .env:
+#   ORACLE=<ChainlinkOracleAdapter>
+#   SWAP_ROUTER=<UniV3RouterAdapter>
+#   POOL_DEPLOYER=<V3PoolDeployerAdapter>
+
+# Step 2 — full platform (PIT omitted; deploys with pit=address(0))
+forge script script/Deploy.s.sol \
+  --rpc-url $RPC_URL --broadcast --verify
+# Writes deployments/deployments.4663.json consumed by the web app.
 ```
 
-### c) Owner wiring (once) — per reward stock, do BOTH:
+### c) Per-stock wiring (NVDA, TSLA, AAPL — do all three)
+
+```bash
+# For each stock address <STOCK> and its Chainlink feed <FEED>:
+cast send $ORACLE "setTokenFeed(address,address)" <STOCK> <FEED> \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Route: WETH → USDG → stock, both 0.3 %
+USDG=0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168
+cast send $SWAP_ROUTER "setRouteVia(address,address,uint24,uint24)" \
+  <STOCK> $USDG 3000 3000 \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Create game tables (replace <CREATOR> with your creator wallet)
+cast send $ROLL_FACTORY "createMachine(address,address)" <STOCK> <CREATOR> \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+#   → note the returned machine address
+
+cast send $ROULETTE_FACTORY "createWheel(address,address)" <STOCK> <CREATOR> \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+#   → note the returned wheel address
+
+# Register each machine + wheel as a certificate issuer and floor bumper
+cast send $CERTIFICATE "setIssuer(address,bool)" <MACHINE> true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $FLOOR "setBumper(address,bool)" <MACHINE> true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $CERTIFICATE "setIssuer(address,bool)" <WHEEL> true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $FLOOR "setBumper(address,bool)" <WHEEL> true \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 ```
-oracle.setTokenFeed(<stock>, <chainlink feed>)
-router.setRouteVia(<stock>, 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168, 3000, 3000)   # USDG mid-hop
-rollFactory.createMachine(<stock>, <creator>)     # Degen Roll table
-rouletteFactory.createWheel(<stock>, <creator>)   # Roulette table
-# then register each machine/wheel as cert issuer + floor bumper (see Deploy.s.sol)
-```
-Do this for **NVDA, TSLA, AAPL**.
 
 ### d) Global wiring
-```
-houseBook.setRouter(<UniV3RouterAdapter>)
-loanVault.setConfig(houseBook, <ChainlinkOracleAdapter>, protocolReserve, minFee)
-amm.setPrice(<PRICE in $PITBOSS>)                 # tune to $PITBOSS supply/decimals
-activation.setActivationFee(<fee in $PITBOSS>)    # tune to $PITBOSS decimals
+
+```bash
+# Point HouseBook at the production swap router
+cast send $HOUSE_BOOK "setRouter(address)" $SWAP_ROUTER \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Point LoanVault at the production oracle + final fee floor (0.006 ETH default)
+cast send $LOAN_VAULT "setConfig(address,address,address,uint256)" \
+  $HOUSE_BOOK $ORACLE $PROTOCOL_RESERVE 6000000000000000 \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# ── Tune after Pons graduation (once $PITBOSS supply/decimals are known) ──
+# amm.setPrice(<PRICE_PIT in wei>)            — e.g. 500000000000000000000000 = 500k tokens
+# activation.setActivationFee(<fee in wei>)   — e.g.     500000000000000000000 = 500 tokens
 ```
 
 ### e) Randomness pairing + fee float (required)
-```
-BlockhashRandomnessServiceV3.setSpinEngine(<VRFServiceConductor>)   # one-shot, service owner
-send ETH → <VRFServiceConductor>                                    # pre-pays per-request VRF fees
+
+```bash
+VRF_SVC=0x19856b7E4Ab191fC265525E400b9E686f75AE327
+# Pair the conductor to the VRF service (called by the VRF service owner, not the deployer)
+cast send $VRF_SVC "setSpinEngine(address)" $VRF_CONDUCTOR \
+  --rpc-url $RPC_URL --private-key <VRF_SERVICE_OWNER_KEY>
+
+# Pre-fund the conductor with ETH for per-request VRF fees
+cast send $VRF_CONDUCTOR --value 0.1ether \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 ```
 
 ### f) NFT art
@@ -107,6 +171,26 @@ available.
 - Confirm NVDA/TSLA/AAPL swaps execute through the USDG route with acceptable slippage.
 - External audit (scope: the taxed `$PITBOSS` paths, both adapters, VRFServiceConductor).
 
-## 6. The two blanks to fill
-1. **`UNIV3_ROUTER`** — Uniswap V3 SwapRouter02 on Robinhood Chain.
-2. **`PIT_TOKEN`** — `$PITBOSS`, after launching on Pons.
+## 6. After Pons graduation — wire the $PIT token
+
+Once `$PITBOSS` has graduated on Pons and its contract address is known, call
+`setPIT` on the three contracts that need it.  This is a one-time, irreversible
+setter on each — call it once, in order:
+
+```bash
+PIT=<pons graduated $PITBOSS address>
+
+cast send $AMM          "setPIT(address)" $PIT --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $ACTIVATION   "setPIT(address)" $PIT --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+cast send $LOAN_VAULT   "setPIT(address)" $PIT --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Then fund the AMM with PIT so Bosses are buyable:
+cast send $PIT "transfer(address,uint256)" $AMM <amount_in_wei> \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+```
+
+## 7. The blanks to fill before deploy
+1. **`UNIV3_ROUTER`** — Uniswap V3 SwapRouter02 on Robinhood Chain (check explorer.robinhood.com).
+2. **`V3_POSITION_MGR`** — Uniswap V3 NonfungiblePositionManager on Robinhood Chain.
+3. **`V3_FACTORY`** — Uniswap V3 Factory on Robinhood Chain.
+4. **`PIT_TOKEN`** — `$PITBOSS`, after launching on Pons (can be omitted at initial deploy).
