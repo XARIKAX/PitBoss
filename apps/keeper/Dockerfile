@@ -1,11 +1,14 @@
 # PitBosses keeper image. One image runs any of the four bots; the compose file
-# (or `docker run ... pnpm <bot>`) selects which. Runs TypeScript directly via tsx.
+# (or the platform's start command, e.g. `pnpm fulfill`) selects which. Runs
+# TypeScript directly via tsx.
 FROM node:20-alpine
 
-# pnpm via corepack (pinned in package.json "packageManager").
-RUN corepack enable
-
 WORKDIR /app
+
+# pnpm installed directly from the registry — NOT via corepack. Corepack has to
+# fetch pnpm at build time and its bundled signature keys go stale on base
+# images, failing image builds (Railway et al) with opaque errors.
+RUN npm install -g pnpm@9.6.0 --no-audit --no-fund
 
 # Install deps first for layer caching. No lockfile is committed here, so this
 # resolves against the ranges in package.json.
@@ -16,6 +19,6 @@ RUN pnpm install --prod=false
 COPY tsconfig.json ./
 COPY src ./src
 
-# Default to the read-only aggregator; compose overrides `command` per service.
+# Default to the read-only aggregator; compose/platform overrides per service.
 ENV NODE_ENV=production
 CMD ["pnpm", "season-agg"]
