@@ -26,6 +26,7 @@ import degenRollJson from '@/lib/abi/DegenRoll.json';
 import degenRollFactoryJson from '@/lib/abi/DegenRollFactory.json';
 import rouletteWheelJson from '@/lib/abi/RouletteWheel.json';
 import rouletteWheelFactoryJson from '@/lib/abi/RouletteWheelFactory.json';
+import freeMintPassJson from '@/lib/abi/FreeMintPass.json';
 import liquidityLockerJson from '@/lib/abi/LiquidityLocker.json';
 import loanVaultJson from '@/lib/abi/LoanVault.json';
 import launcherFactoryJson from '@/lib/abi/LauncherFactory.json';
@@ -50,6 +51,7 @@ export const ABIS = {
   degenRollFactory: degenRollFactoryJson as unknown as Abi,
   rouletteWheel: rouletteWheelJson as unknown as Abi,
   rouletteWheelFactory: rouletteWheelFactoryJson as unknown as Abi,
+  freeMintPass: freeMintPassJson as unknown as Abi,
   liquidityLocker: liquidityLockerJson as unknown as Abi,
   loanVault: loanVaultJson as unknown as Abi,
   launcherFactory: launcherFactoryJson as unknown as Abi,
@@ -76,6 +78,7 @@ export type Contracts = {
   certificateCounter: ContractRef;
   degenRollFactory: ContractRef;
   rouletteWheelFactory: ContractRef;
+  freeMintPass: ContractRef;
   loanVault: ContractRef;
   locker: ContractRef;
   launcher: ContractRef;
@@ -101,6 +104,7 @@ export function getContracts(chainId: number): Contracts {
     certificateCounter: { address: d.certificateCounter, abi: ABIS.certificateCounter },
     degenRollFactory: { address: d.degenRollFactory, abi: ABIS.degenRollFactory },
     rouletteWheelFactory: { address: d.rouletteWheelFactory, abi: ABIS.rouletteWheelFactory },
+    freeMintPass: { address: d.freeMintPass, abi: ABIS.freeMintPass },
     loanVault: { address: d.loans, abi: ABIS.loanVault },
     locker: { address: d.locker, abi: ABIS.liquidityLocker },
     launcher: { address: d.launcher, abi: ABIS.launcherFactory },

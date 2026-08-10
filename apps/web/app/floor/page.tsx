@@ -23,6 +23,7 @@ import { explorerAddress } from '@/config/chains';
 export default function FloorPage() {
   const { isConnected, address } = useAccount();
   const { c, chainId } = useContracts();
+  const freeMintLive = isDeployed(c.freeMintPass.address);
   const ammLive = isDeployed(c.flatAmmVault.address);
 
   return (
@@ -31,15 +32,21 @@ export default function FloorPage() {
         eyebrow="The Floor"
         title="Get a Boss."
         emphasis="Put it to work."
-        lede="Buy off the flat AMM or snipe a listing. Activate it and it starts earning on the floor."
+        lede={
+          freeMintLive
+            ? 'Free mint — pay only gas. Activate your Boss and it starts earning on the floor.'
+            : 'Buy off the flat AMM or snipe a listing. Activate it and it starts earning on the floor.'
+        }
       >
         {!isConnected ? <ConnectButton /> : null}
       </PageHeader>
 
       {/* GET A BOSS */}
-      <Section label="Get a Boss" title="Buy" emphasis="or snipe.">
+      <Section label="Get a Boss" title="Mint" emphasis="free.">
         <BossGallery />
-        {!ammLive ? (
+        {freeMintLive ? (
+          <FreeMintCard />
+        ) : !ammLive ? (
           <EmptyState
             title="Minting opens at launch"
             hint="Buy and snipe go live here the moment the floor opens — flat price, paid in $PITBOSS, straight from the vault."
@@ -103,6 +110,64 @@ function BossGallery() {
           </figcaption>
         </figure>
       ))}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- free mint */
+
+function FreeMintCard() {
+  const { isConnected } = useAccount();
+  const { c } = useContracts();
+  const { send, busy } = useTx();
+
+  const minted = useRead<bigint>({ contract: c.pitBoss, functionName: 'totalMinted', refetchInterval: 10_000 });
+  const maxSupply = useRead<bigint>({ contract: c.pitBoss, functionName: 'MAX_SUPPLY' });
+  const open = useRead<boolean>({ contract: c.freeMintPass, functionName: 'open', refetchInterval: 15_000 });
+
+  const soldOut = minted.data != null && maxSupply.data != null && minted.data >= maxSupply.data;
+  const paused = open.data === false;
+
+  async function onMint() {
+    await send(
+      { address: c.freeMintPass.address, abi: c.freeMintPass.abi, functionName: 'mint' },
+      { title: 'Mint your Boss' },
+    );
+    minted.refetch?.();
+  }
+
+  return (
+    <div className="card max-w-md">
+      <p className="headline text-[15px]">Free Mint</p>
+      <p className="mt-2 text-sm text-mute">
+        Mint a PitBoss NFT — pay only gas. You get a token-bound account and a seat on the floor.
+        Supply is limited to 888.
+      </p>
+      <div className="mt-5 space-y-2 text-sm">
+        <Row k="Price" v="Free (gas only)" />
+        <Row
+          k="Minted"
+          v={
+            minted.data != null && maxSupply.data != null
+              ? `${minted.data.toString()} / ${maxSupply.data.toString()}`
+              : '…'
+          }
+        />
+        <Row k="Status" v={soldOut ? 'Sold out' : paused ? 'Paused' : 'Open'} />
+      </div>
+      <button
+        onClick={onMint}
+        disabled={!isConnected || busy || soldOut || paused}
+        className="pill-lime mt-4 w-full disabled:opacity-50"
+      >
+        {!isConnected
+          ? 'Connect to mint'
+          : soldOut
+            ? 'Sold out'
+            : paused
+              ? 'Mint paused'
+              : 'Mint your Boss — free'}
+      </button>
     </div>
   );
 }
