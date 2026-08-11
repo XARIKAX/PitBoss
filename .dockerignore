@@ -5,7 +5,11 @@
 **/out
 **/dist
 art
-contracts
+# Keep the deployments artifact — the keeper resolves every contract address
+# from it. Excluding all of contracts/ left the image with no addresses at all,
+# so every bot started clean and then silently did nothing.
+contracts/*
+!contracts/deployments
 docs
 apps/web
 *.log
