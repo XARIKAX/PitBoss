@@ -15,8 +15,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-/** The bell rings: Mon Aug 17, 2026 · 8PM EST. One source of truth. */
-export const LAUNCH_AT = new Date('2026-08-17T20:00:00-04:00').getTime();
+/** The bell rings: Tue Aug 18, 2026 · 8PM EST. One source of truth — the strip,
+ *  the hero and the launcher's open/closed state all read this. */
+export const LAUNCH_AT = new Date('2026-08-18T20:00:00-04:00').getTime();
 /** Countdown window (for the burn-down bar): opened ~8 days before the bell,
  *  so the bar shows visible progress from the moment the campaign goes up. */
 const WINDOW_MS = 8 * 24 * 60 * 60 * 1000;
@@ -70,6 +71,22 @@ function useBellDate() {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Has the bell rung yet? False during SSR and the first paint (so server and
+ * client agree), then the real answer. Deploying the contracts does NOT open
+ * the launcher — only the clock does.
+ */
+export function useLaunchPassed(): boolean {
+  const [passed, setPassed] = useState(false);
+  useEffect(() => {
+    const check = () => setPassed(Date.now() >= LAUNCH_AT);
+    check();
+    const t = setInterval(check, 1000);
+    return () => clearInterval(t);
+  }, []);
+  return passed;
+}
 
 // ---------------------------------------------------------------- strip ----
 

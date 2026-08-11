@@ -7,7 +7,7 @@ import { formatEther, parseEther, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { DemoBanner, Meter } from '@/components/demo';
-import { LaunchHero } from '@/components/LaunchCountdown';
+import { LaunchHero, useLaunchPassed } from '@/components/LaunchCountdown';
 import { LedBar } from '@/components/viz';
 import { ABIS, readMany, safeRead, useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
@@ -113,7 +113,10 @@ function useLaunches() {
 
 export default function LauncherPage() {
   const { c } = useContracts();
-  const launcherLive = isDeployed(c.launcher.address);
+  // Deployed is not the same as open: the launcher stays closed — countdown
+  // showing, wizard locked — until the bell actually rings.
+  const launchPassed = useLaunchPassed();
+  const launcherLive = isDeployed(c.launcher.address) && launchPassed;
 
   return (
     <ChainGuard>
@@ -153,8 +156,12 @@ export default function LauncherPage() {
         )}
       </Section>
 
-      {/* LIVE LAUNCHES */}
-      <Section label="Live launches" title="Fill the" emphasis="bar.">
+      {/* LAUNCHES */}
+      <Section
+        label={launcherLive ? 'Live launches' : 'Launches'}
+        title="Fill the"
+        emphasis="bar."
+      >
         {launcherLive ? <LaunchList /> : <DemoLaunches />}
       </Section>
 
