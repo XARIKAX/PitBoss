@@ -10,7 +10,7 @@ import { DemoBanner } from '@/components/demo';
 import { ABIS, readMany, safeRead, useContracts, useRead, type ContractRef } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed, PLACEHOLDER } from '@/lib/deployments';
-import { shortAddr } from '@/lib/format';
+import { fmtUnits, shortAddr } from '@/lib/format';
 
 /**
  * Roulette — a second Pit table, wired to RouletteWheelFactory + RouletteWheel.
@@ -116,17 +116,35 @@ function slicePath(cx: number, cy: number, rOut: number, rIn: number, a0: number
 }
 
 // ── The wheel ───────────────────────────────────────────────────────────────
+
+/**
+ * `waiting` — the bet is committed and the wheel free-spins at a constant rate
+ * until the outcome arrives (entropy delay + whoever settles first).
+ * `landing` — the outcome is known; decelerate onto its pocket.
+ */
+type Phase = 'idle' | 'waiting' | 'landing';
+
+const LAND_MS = 4800;
+const WAIT_STEP_MS = 1200;
+
+function wheelTransition(phase: Phase, ease: string): string {
+  if (phase === 'landing') return `transform ${LAND_MS}ms ${ease}`;
+  if (phase === 'waiting') return `transform ${WAIT_STEP_MS}ms linear`;
+  return 'none';
+}
+
 function Wheel({
   rotation,
   ballRotation,
-  spinning,
+  phase,
   landedHue,
 }: {
   rotation: number;
   ballRotation: number;
-  spinning: boolean;
+  phase: Phase;
   landedHue: Hue | null;
 }) {
+  const spinning = phase !== 'idle';
   const cx = 150,
     cy = 150;
   const rBezel = 149,
@@ -195,7 +213,7 @@ function Wheel({
         style={{
           transform: `rotate(${rotation}deg)`,
           transformOrigin: '150px 150px',
-          transition: spinning ? `transform 4.8s ${ease}` : 'none',
+          transition: wheelTransition(phase, ease),
         }}
       >
         {WHEEL_ORDER.map((n, i) => {
@@ -246,7 +264,7 @@ function Wheel({
         style={{
           transform: `rotate(${rotation * 0.5}deg)`,
           transformOrigin: '150px 150px',
-          transition: spinning ? `transform 4.8s ${ease}` : 'none',
+          transition: wheelTransition(phase, ease),
         }}
       >
         <g stroke={C.lime} strokeWidth="3.2" strokeLinecap="round" opacity="0.95">
@@ -266,7 +284,7 @@ function Wheel({
         style={{
           transform: `rotate(${ballRotation}deg)`,
           transformOrigin: '150px 150px',
-          transition: spinning ? `transform 4.8s ${ease}` : 'none',
+          transition: wheelTransition(phase, ease),
         }}
       >
         <circle
@@ -390,14 +408,19 @@ type OpenSpin = {
   status: number;
 };
 
-function useOpenSpins(wheelAddr: Address) {
+/**
+ * @param live Poll hard while a bet is in flight — this is the path the outcome
+ *   arrives on now that the keeper settles, so its interval is the delay the
+ *   player actually feels between the wheel spinning and the result landing.
+ */
+function useOpenSpins(wheelAddr: Address, live = false) {
   const { address } = useAccount();
   const { chainId } = useContracts();
   const client = usePublicClient();
   return useQuery({
     queryKey: ['rouletteOpenSpins', chainId, wheelAddr, address ?? '0x0'],
     enabled: Boolean(client && address),
-    refetchInterval: 15_000,
+    refetchInterval: live ? 3_000 : 15_000,
     queryFn: async (): Promise<{
       spins: OpenSpin[];
       lastSettled: {spinId: bigint; pocket: bigint; win: boolean; prize: bigint } | null;
@@ -563,10 +586,9 @@ function WheelTile({
         <div className="eyebrow flex justify-between">
           <span>bankroll</span>
           <span className="num">
-            {total.data != null
-              ? Number(formatEther(total.data)).toLocaleString(undefined, { maximumFractionDigits: 0 })
-              : '…'}{' '}
-            {w.symbol}
+            {/* Tokenized stock trades in fractions — rounding to whole units
+                rendered a funded 0.28 NVDA bankroll as a bare "0". */}
+            {total.data != null ? fmtUnits(total.data) : '…'} {w.symbol}
           </span>
         </div>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/60">
@@ -676,30 +698,53 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
     () => ({ address: wheel.address, abi: ABIS.rouletteWheel }),
     [wheel.address],
   );
-  const spinsQ = useOpenSpins(wheel.address);
-
   const [rotation, setRotation] = useState(0);
   const [ballRotation, setBallRotation] = useState(0);
-  const [spinning, setSpinning] = useState(false);
+  const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<{ win: boolean; pocket: number; prize: bigint } | null>(null);
   const [showModal, setShowModal] = useState(false);
+
+  // Poll hard only while a bet is actually in flight.
+  const spinsQ = useOpenSpins(wheel.address, phase === 'waiting');
 
   /** Spin ids whose outcome the player has already been shown. */
   const seenSettleId = useRef<bigint | null>(null);
   const primed = useRef(false);
+  const spinning = phase !== 'idle';
 
   // Reset visual when switching wheels.
   useEffect(() => {
-    setSpinning(false);
+    setPhase('idle');
     setResult(null);
     setShowModal(false);
     seenSettleId.current = null;
     primed.current = false;
   }, [wheel.address]);
 
-  /** Animate the wheel to the landed pocket and show the result modal. */
+  /**
+   * Free-spin while waiting. Each step is a full turn on a linear transition of
+   * the same duration, so the wheel keeps a constant rate with no visible seam
+   * between steps.
+   */
+  useEffect(() => {
+    if (phase !== 'waiting') return;
+    const id = window.setInterval(() => setRotation((r) => r + 360), WAIT_STEP_MS);
+    // Kick the first turn immediately rather than waiting out one interval.
+    setRotation((r) => r + 360);
+    return () => window.clearInterval(id);
+  }, [phase]);
+
+  /** The bet is in. Spin until the outcome arrives. */
+  function beginWaiting(spinId: bigint) {
+    setResult(null);
+    setShowModal(false);
+    // A fresh bet supersedes whatever was last shown.
+    if (seenSettleId.current !== spinId) setPhase('waiting');
+  }
+
+  /** Decelerate onto the landed pocket, then reveal. */
   function animateTo(pocket: number, win: boolean, prize: bigint) {
-    setSpinning(true);
+    setPhase('landing');
     setResult(null);
     setShowModal(false);
     const idx = WHEEL_ORDER.indexOf(pocket);
@@ -708,9 +753,9 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
     setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 5);
     window.setTimeout(() => {
       setResult({ win, pocket, prize });
-      setSpinning(false);
+      setPhase('idle');
       setShowModal(true);
-    }, 4900);
+    }, LAND_MS + 100);
   }
 
   /**
@@ -756,7 +801,8 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
         wheel={wheel}
         ref_={ref}
         spinning={spinning}
-        setSpinning={setSpinning}
+        phase={phase}
+        beginWaiting={beginWaiting}
         result={result}
         winCell={winCell}
         rotation={rotation}
@@ -767,7 +813,7 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
         ref_={ref}
         q={spinsQ}
         showResult={showResult}
-        setSpinning={setSpinning}
+        setPhase={setPhase}
       />
       <BankrollSection wheel={wheel} ref_={ref} />
     </>
@@ -780,7 +826,8 @@ function SpinSection({
   wheel,
   ref_,
   spinning,
-  setSpinning,
+  phase,
+  beginWaiting,
   result,
   winCell,
   rotation,
@@ -789,7 +836,8 @@ function SpinSection({
   wheel: WheelInfo;
   ref_: ContractRef;
   spinning: boolean;
-  setSpinning: (v: boolean) => void;
+  phase: Phase;
+  beginWaiting: (spinId: bigint) => void;
   result: { win: boolean; pocket: number; prize: bigint } | null;
   winCell: number | null;
   rotation: number;
@@ -837,7 +885,6 @@ function SpinSection({
       bet.kind === 'straight' || bet.kind === 'dozen' || bet.kind === 'column'
         ? bet.selection
         : 0;
-    setSpinning(true);
     const receipt = await send(
       {
         address: ref_.address,
@@ -848,10 +895,16 @@ function SpinSection({
       },
       { title: `Spin · ${bet.label}` },
     );
-    setSpinning(false);
     if (!receipt) return;
-    // Spin committed — open spins will refresh automatically. No animation here;
-    // the wheel animates when the player settles below.
+    // The bet is committed. Start the wheel now and let it run until the outcome
+    // lands — the settle keeper resolves it, so the player never has to act again.
+    try {
+      const [ev] = parseEventLogs({ abi: [SPIN_BOUGHT_EVENT], logs: receipt.logs });
+      if (ev?.args.spinId != null) beginWaiting(ev.args.spinId);
+    } catch {
+      // Couldn't read the id — the poll still surfaces the outcome, just without
+      // the wheel spinning in the meantime.
+    }
   }
 
   function NumCell({ n }: { n: number }) {
@@ -1002,13 +1055,19 @@ function SpinSection({
           >
             {!isConnected
               ? 'Connect to spin'
-              : spinning || busy
-                ? 'Committing…'
-                : mode === 'auto'
-                  ? 'Auto — soon'
-                  : 'Spin'}
+              : busy
+                ? 'Confirm in wallet…'
+                : phase === 'waiting'
+                  ? 'Spinning…'
+                  : phase === 'landing'
+                    ? 'Landing…'
+                    : mode === 'auto'
+                      ? 'Auto — soon'
+                      : 'Spin'}
           </button>
-          <p className="mt-2 text-[11px] text-mute">Settle in the section below once entropy is ready.</p>
+          <p className="mt-2 text-[11px] text-mute">
+            One click. The keeper settles your spin and the wheel lands on its own.
+          </p>
         </div>
 
         {/* ── Wheel + table ── */}
@@ -1025,7 +1084,7 @@ function SpinSection({
                 <Wheel
                   rotation={rotation}
                   ballRotation={ballRotation}
-                  spinning={spinning}
+                  phase={phase}
                   landedHue={result ? hueOf(result.pocket) : null}
                 />
               </div>
@@ -1062,10 +1121,15 @@ function SpinSection({
                       : 'No win'}
                   </span>
                 </div>
+              ) : phase === 'waiting' ? (
+                <p className="data pt-3 text-center text-[11px] text-lime">
+                  <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-lime align-middle" />
+                  Waiting for entropy — the wheel lands itself, no action needed.
+                </p>
               ) : (
                 <p className="pt-3 text-center text-[11px] text-dim">
                   {isConnected
-                    ? 'Place a chip, spin, then settle below.'
+                    ? 'Place a chip and spin. The wheel resolves on its own.'
                     : 'Connect wallet to play.'}
                 </p>
               )}
@@ -1194,13 +1258,13 @@ function OpenSpinsSection({
   ref_,
   q,
   showResult,
-  setSpinning,
+  setPhase,
 }: {
   wheel: WheelInfo;
   ref_: ContractRef;
   q: ReturnType<typeof useOpenSpins>;
   showResult: (spinId: bigint, pocket: number, win: boolean, prize: bigint) => void;
-  setSpinning: (v: boolean) => void;
+  setPhase: (p: Phase) => void;
 }) {
   const { isConnected } = useAccount();
   const { send, busy } = useTx();
@@ -1210,7 +1274,7 @@ function OpenSpinsSection({
   const open = all.filter((s) => s.status === 0);
 
   async function settleWithAnimation(fn: 'settle' | 'sealIntoCertificate', spinId: bigint) {
-    setSpinning(true);
+    setPhase('waiting');
     const receipt = await send(
       {
         address: ref_.address,
@@ -1221,7 +1285,9 @@ function OpenSpinsSection({
       { title: `${fn === 'settle' ? 'Settle' : 'Seal'} spin #${spinId.toString()}` },
     );
     if (!receipt) {
-      setSpinning(false);
+      // Commonly RoundAlreadySettled — the keeper got there first, and the poll
+      // will surface the outcome on its own.
+      setPhase('idle');
       return;
     }
     try {
@@ -1236,7 +1302,7 @@ function OpenSpinsSection({
     } catch {
       // fall through — the poll will surface the outcome instead
     }
-    setSpinning(false);
+    setPhase('idle');
   }
 
   return (
@@ -1251,7 +1317,7 @@ function OpenSpinsSection({
       ) : open.length === 0 ? (
         <EmptyState
           title="No open spins"
-          hint="Spins awaiting settlement appear here with settle, seal and refund controls. Spin above to start one."
+          hint="Spins resolve on their own. Anything still waiting shows up here, where you can settle it by hand, seal a win into a certificate, or refund after 48h."
         />
       ) : (
         <div className="grid gap-3">
@@ -1708,7 +1774,7 @@ function DemoRoulette() {
                 <Wheel
                   rotation={rotation}
                   ballRotation={ballRotation}
-                  spinning={spinning}
+                  phase={spinning ? 'landing' : 'idle'}
                   landedHue={result ? hueOf(result.pocket) : null}
                 />
               </div>

@@ -12,7 +12,7 @@ import { PRIZE_TABLE } from '@/lib/prizeTable';
 import { ABIS, readMany, safeRead, useContracts, useRead, type ContractRef } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { isDeployed, PLACEHOLDER } from '@/lib/deployments';
-import { shortAddr } from '@/lib/format';
+import { fmtUnits, shortAddr } from '@/lib/format';
 
 /**
  * The Pit — machine grid + per-machine controls, fully wired to DegenRoll.
@@ -410,10 +410,9 @@ function CabinetTile({
         <div className="eyebrow flex justify-between">
           <span>bankroll</span>
           <span className="num">
-            {total.data != null
-              ? Number(formatEther(total.data)).toLocaleString(undefined, { maximumFractionDigits: 0 })
-              : '…'}{' '}
-            {m.symbol}
+            {/* Tokenized stock trades in fractions — rounding to whole units
+                rendered a funded 0.28 NVDA bankroll as a bare "0". */}
+            {total.data != null ? fmtUnits(total.data) : '…'} {m.symbol}
           </span>
         </div>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/60">
