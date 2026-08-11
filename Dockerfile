@@ -15,5 +15,7 @@ RUN pnpm install --prod=false
 COPY apps/keeper/tsconfig.json ./
 COPY apps/keeper/src ./src
 
+# Run every bot by default, so a single-service deploy gets full upkeep. Narrow
+# it with KEEPER_BOTS (e.g. KEEPER_BOTS=fulfill) to run one bot per service.
 ENV NODE_ENV=production
-CMD ["pnpm", "season-agg"]
+CMD ["pnpm", "all"]
