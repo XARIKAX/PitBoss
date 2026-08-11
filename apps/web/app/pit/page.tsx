@@ -882,7 +882,8 @@ type Round = {
   status: number;
 };
 
-const ROUND_STATUS = ['none', 'open', 'settled', 'refunded'] as const;
+// Mirrors DegenRoll.Status — Open = 0, Settled = 1, Refunded = 2.
+const ROUND_STATUS = ['open', 'settled', 'refunded'] as const;
 
 function useMyRounds(machine: Address) {
   const { address } = useAccount();
@@ -965,7 +966,7 @@ function OpenRoundsSection({
   const now = Math.floor(Date.now() / 1000);
 
   const rounds = q.data?.rounds ?? [];
-  const open = rounds.filter((r) => r.status === 1);
+  const open = rounds.filter((r) => r.status === 0); // Status.Open
 
   /** Send settle/seal, spinning the reel and locking it onto the receipt's Settled event. */
   async function settleWithReel(fn: 'settle' | 'sealIntoCertificate', roundId: bigint) {
