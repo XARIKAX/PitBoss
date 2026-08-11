@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "all": "tsx src/all.ts",
     "fulfill": "tsx src/fulfill.ts",
     "crank-watch": "tsx src/crank-watch.ts",
     "restock": "tsx src/restock.ts",

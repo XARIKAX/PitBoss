@@ -378,6 +378,17 @@ async function main() {
     },
   ];
 
+  // With no factory the loop below skips every game and reports a clean tick
+  // forever — a dead keeper that looks healthy. Refuse to start instead.
+  if (!cfg.addresses.factory && !cfg.addresses.rouletteFactory) {
+    throw new Error(
+      "no game factories resolved — the settle keeper would idle forever. " +
+        "Set FACTORY_ADDRESS and/or ROULETTE_FACTORY_ADDRESS, or point " +
+        `DEPLOYMENTS_DIR at a directory containing deployments.${cfg.chainId}.json ` +
+        `(currently ${cfg.deploymentsDir}).`,
+    );
+  }
+
   const rpcBackoff = new Backoff({maxMs: cfg.maxBackoffMs});
   log.info("settle keeper up", {
     fallbackConductor: fallbackConductor ?? "(none)",

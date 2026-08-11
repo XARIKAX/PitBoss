@@ -15,5 +15,12 @@ RUN pnpm install --prod=false
 COPY apps/keeper/tsconfig.json ./
 COPY apps/keeper/src ./src
 
+# Contract addresses. Without this the bots resolve every address to undefined
+# and quietly idle; env vars (FACTORY_ADDRESS etc.) still override per-key.
+COPY contracts/deployments ./contracts/deployments
+ENV DEPLOYMENTS_DIR=/app/contracts/deployments
+
+# Run every bot by default, so a single-service deploy gets full upkeep. Narrow
+# it with KEEPER_BOTS (e.g. KEEPER_BOTS=fulfill) to run one bot per service.
 ENV NODE_ENV=production
-CMD ["pnpm", "season-agg"]
+CMD ["pnpm", "all"]
