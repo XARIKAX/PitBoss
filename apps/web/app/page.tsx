@@ -3,6 +3,7 @@ import { Reveal } from '@/components/Reveal';
 import { OddsTable } from '@/components/OddsTable';
 import { HeroBanner } from '@/components/HeroBanner';
 import { TokenAddress } from '@/components/TokenAddress';
+import { LiveStats } from '@/components/LiveStats';
 
 /**
  * Home — terminal-trading dashboard.
@@ -114,21 +115,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Stat rail */}
-          <div className="grid content-start gap-3 sm:grid-cols-2">
-            {[
-              { l: 'House Book', v: '$2.41M', s: 'total accrued' },
-              { l: 'Edge', v: '10%', s: 'RTP 90%' },
-              { l: 'Bosses', v: '888', s: 'fixed supply' },
-              { l: 'Last bell', v: '+18.2%', s: '$PITBOSS/ETH' },
-            ].map((x) => (
-              <div key={x.l} className="panel-raised px-4 py-3.5">
-                <p className="label">{x.l}</p>
-                <p className="num mt-1 font-mono text-[22px] font-semibold text-lime">{x.v}</p>
-                <p className="text-[11px] text-mute">{x.s}</p>
-              </div>
-            ))}
-          </div>
+          {/* Stat rail — live chain reads (activated, burned, book, minted) */}
+          <LiveStats />
         </div>
       </section>
 

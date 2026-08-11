@@ -43,6 +43,9 @@ export const IconBook = (p: SVGProps<SVGSVGElement>) => (
 export const IconSeasons = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M7 4h10v3a5 5 0 0 1-10 0Z" /><path d="M7 5H4.5v1.5A2.5 2.5 0 0 0 7 9M17 5h2.5v1.5A2.5 2.5 0 0 1 17 9" /><path d="M12 12v3M9 20h6M10 17h4l.5 3h-5Z" /></svg>
 );
+export const IconStats = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 20v-6M12.5 20V8M17 20v-9" /></svg>
+);
 export const IconDocs = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M6 3.5h8l4 4V20.5H6Z" /><path d="M13.5 3.5V8H18" /><path d="M9 12h6M9 15h6M9 18h4" /></svg>
 );

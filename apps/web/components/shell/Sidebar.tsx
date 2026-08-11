@@ -20,6 +20,7 @@ import {
   IconBook,
   IconSeasons,
   IconDocs,
+  IconStats,
   IconClose,
 } from './icons';
 
@@ -33,6 +34,7 @@ const NAV = [
   { href: '/locker', label: 'Locker', icon: IconLocker },
   { href: '/loans', label: 'Loans', icon: IconLoans },
   { href: '/book', label: 'House Book', icon: IconBook },
+  { href: '/stats', label: 'Trackers', icon: IconStats },
   { href: '/seasons', label: 'Seasons', icon: IconSeasons },
   { href: '/docs', label: 'Docs', icon: IconDocs },
 ] as const;
