@@ -421,7 +421,11 @@ function CabinetTile({
             style={{ width: `${pct ?? 0}%` }}
           />
         </div>
-        <p className="eyebrow mt-1.5">{pct != null ? `${pct}% free to win` : '…'}</p>
+        {/* "free" = bankroll not reserved against open bets, i.e. what a new bet
+            can actually win right now. The bare percentage read as a win chance. */}
+        <p className="eyebrow mt-1.5">
+          {free.data != null ? `${fmtUnits(free.data)} available to win` : '…'}
+        </p>
       </div>
       <p className="data mt-3 text-xs text-mute">{shortAddr(m.address)}</p>
     </button>
