@@ -124,7 +124,7 @@ function slicePath(cx: number, cy: number, rOut: number, rIn: number, a0: number
  */
 type Phase = 'idle' | 'waiting' | 'landing';
 
-const LAND_MS = 4800;
+const LAND_MS = 2200;
 const WAIT_STEP_MS = 1200;
 
 function wheelTransition(phase: Phase, ease: string): string {
@@ -420,7 +420,7 @@ function useOpenSpins(wheelAddr: Address, live = false) {
   return useQuery({
     queryKey: ['rouletteOpenSpins', chainId, wheelAddr, address ?? '0x0'],
     enabled: Boolean(client && address),
-    refetchInterval: live ? 3_000 : 15_000,
+    refetchInterval: live ? 1_500 : 15_000,
     queryFn: async (): Promise<{
       spins: OpenSpin[];
       lastSettled: {spinId: bigint; pocket: bigint; win: boolean; prize: bigint } | null;
@@ -597,7 +597,11 @@ function WheelTile({
             style={{ width: `${pct ?? 0}%` }}
           />
         </div>
-        <p className="eyebrow mt-1.5">{pct != null ? `${pct}% free to win` : '…'}</p>
+        {/* "free" = bankroll not reserved against open bets, i.e. what a new bet
+            can actually win right now. The bare percentage read as a win chance. */}
+        <p className="eyebrow mt-1.5">
+          {free.data != null ? `${fmtUnits(free.data)} available to win` : '…'}
+        </p>
       </div>
       <p className="data mt-3 text-xs text-mute">{shortAddr(w.address)}</p>
     </button>
@@ -749,8 +753,8 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
     setShowModal(false);
     const idx = WHEEL_ORDER.indexOf(pocket);
     const mid = idx * SEG + SEG / 2;
-    setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 6 + ((360 - mid) % 360));
-    setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 5);
+    setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 3 + ((360 - mid) % 360));
+    setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 3);
     window.setTimeout(() => {
       setResult({ win, pocket, prize });
       setPhase('idle');
@@ -1601,8 +1605,8 @@ function DemoRoulette() {
     const landed = Math.floor(Math.random() * POCKETS);
     const idx = WHEEL_ORDER.indexOf(landed);
     const mid = idx * SEG + SEG / 2;
-    setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 6 + ((360 - mid) % 360));
-    setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 5);
+    setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 3 + ((360 - mid) % 360));
+    setBallRotation((b) => Math.floor(b / 360) * 360 - 360 * 3);
 
     window.setTimeout(() => {
       const r = resolve(bet, landed);

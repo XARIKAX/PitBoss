@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { formatEther, parseAbiItem, parseEther, parseEventLogs, type Address } from 'viem';
@@ -421,7 +421,11 @@ function CabinetTile({
             style={{ width: `${pct ?? 0}%` }}
           />
         </div>
-        <p className="eyebrow mt-1.5">{pct != null ? `${pct}% free to win` : '…'}</p>
+        {/* "free" = bankroll not reserved against open bets, i.e. what a new bet
+            can actually win right now. The bare percentage read as a win chance. */}
+        <p className="eyebrow mt-1.5">
+          {free.data != null ? `${fmtUnits(free.data)} available to win` : '…'}
+        </p>
       </div>
       <p className="data mt-3 text-xs text-mute">{shortAddr(m.address)}</p>
     </button>
@@ -495,15 +499,58 @@ function MachinePanels({
     () => ({ address: machine.address, abi: ABIS.degenRoll }),
     [machine.address],
   );
-  const rounds = useMyRounds(machine.address);
   const [phase, setPhase] = useState<ReelPhase>('idle');
   const [live, setLive] = useState<ReelResult>(null);
+  // Poll hard only while a roll is actually in flight.
+  const rounds = useMyRounds(machine.address, phase === 'spinning');
+
+  /** Round ids whose outcome the player has already been shown. */
+  const seenSettleId = useRef<bigint | null>(null);
+  const primed = useRef(false);
 
   // Reset the reel when switching machines.
   useEffect(() => {
     setPhase('idle');
     setLive(null);
+    seenSettleId.current = null;
+    primed.current = false;
   }, [machine.address]);
+
+  /** Land the reel on a round's outcome exactly once, whoever settled it. */
+  function showResult(roundId: bigint, milliX: bigint, prize: bigint) {
+    if (seenSettleId.current === roundId) return;
+    seenSettleId.current = roundId;
+    setLive({
+      milliX: Number(milliX),
+      prizeText: `${Number(formatEther(prize)).toFixed(4)} ${machine.symbol}`,
+    });
+    setPhase('landed');
+  }
+
+  /** The ticket is in. Spin the reel until the outcome arrives. */
+  function beginWaiting(roundId: bigint) {
+    setLive(null);
+    if (seenSettleId.current !== roundId) setPhase('spinning');
+  }
+
+  /**
+   * The settle keeper usually gets there first, so the outcome arrives by
+   * polling rather than from the player's own receipt. The first response only
+   * primes the seen id — otherwise revisiting the page replays an old roll.
+   */
+  useEffect(() => {
+    const data = rounds.data;
+    if (!data) return;
+    const ls = data.lastSettled;
+    if (!primed.current) {
+      primed.current = true;
+      seenSettleId.current = ls?.roundId ?? null;
+      return;
+    }
+    if (!ls) return;
+    showResult(ls.roundId, ls.milliX, ls.prize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rounds.data]);
 
   const last = rounds.data?.lastSettled ?? null;
   const result: ReelResult =
@@ -525,6 +572,7 @@ function MachinePanels({
         ticketNum={ticketNum}
         phase={phase}
         result={result}
+        beginWaiting={beginWaiting}
       />
       <BankrollSection machine={machine} m={ref} />
       <OpenRoundsSection
@@ -550,6 +598,7 @@ function TicketSection({
   ticketNum,
   phase,
   result,
+  beginWaiting,
 }: {
   machine: Machine;
   m: ContractRef;
@@ -558,6 +607,7 @@ function TicketSection({
   ticketNum: number;
   phase: ReelPhase;
   result: ReelResult;
+  beginWaiting: (roundId: bigint) => void;
 }) {
   const { isConnected, address } = useAccount();
   const { c } = useContracts();
@@ -592,12 +642,41 @@ function TicketSection({
       : null;
   const overCap = lane === 0 && capEth != null && ticketWei != null && ticketWei > capEth;
 
+  // The binding limit in practice. buy() reserves the prize table's 50x ceiling
+  // against free inventory (DegenRoll.sol:162), so a thin bankroll caps the
+  // ticket far below the lane's dollar cap and reverts with ReserveShortfall.
+  const freeStock = useRead<bigint>({ contract: m, functionName: 'freeStock', refetchInterval: 15_000 });
+  const ethPerStock = useRead<bigint>({
+    contract: c.oracle,
+    functionName: 'ethPerToken',
+    args: [machine.stock],
+    enabled: isDeployed(machine.stock),
+    refetchInterval: 30_000,
+  });
+  // notional = ticket * 1e18 / ethPerToken, and reserve = notional * 50 must fit
+  // in free inventory — so ticket <= free * ethPerToken / (50 * 1e18).
+  const bankrollMaxEth =
+    freeStock.data != null && ethPerStock.data != null && ethPerStock.data > 0n
+      ? (freeStock.data * ethPerStock.data) / (50n * 10n ** 18n)
+      : null;
+  const overBankroll =
+    bankrollMaxEth != null && ticketWei != null && ticketWei > bankrollMaxEth;
+
   async function onBuy() {
     if (ticketWei == null || ticketWei === 0n) return;
-    await send(
+    const receipt = await send(
       { address: m.address, abi: m.abi, functionName: 'buy', args: [lane], value: ticketWei },
       { title: `Buy ticket · ${lane === 0 ? 'Instant' : 'Vault'}` },
     );
+    if (!receipt) return;
+    // Ticket is in. Run the reel until the outcome lands — the settle keeper
+    // resolves it, so the player never has to act again.
+    try {
+      const [ev] = parseEventLogs({ abi: [BOUGHT_EVENT], logs: receipt.logs });
+      if (ev?.args.roundId != null) beginWaiting(ev.args.roundId);
+    } catch {
+      // Couldn't read the id — the poll still surfaces the outcome.
+    }
   }
 
   async function onSellBack() {
@@ -647,10 +726,23 @@ function TicketSection({
           <p className="mt-2 text-xs text-mute">
             {lane === 0
               ? `Instant: short delay, settles against the bankroll.${
-                  capEth != null ? ` Capped at ~Ξ${formatEther(capEth)} (≈$${maxUsd.data != null ? formatEther(maxUsd.data) : '100'}).` : ''
+                  // INSTANT_MAX_USD is 1e8-scaled, not 1e18 — formatEther rendered
+                  // the $100 cap as "$0.00000001".
+                  capEth != null
+                    ? ` Capped at ~Ξ${fmtUnits(capEth)} (≈$${
+                        maxUsd.data != null ? (Number(maxUsd.data) / 1e8).toFixed(0) : '100'
+                      }).`
+                    : ''
                 }`
               : 'Vault: escrowed roll — settle, seal into a certificate, or refund later.'}
           </p>
+          {bankrollMaxEth != null ? (
+            <p className={`mt-1 text-xs ${overBankroll ? 'text-red-300' : 'text-dim'}`}>
+              Every ticket reserves its 50× worst case, so this machine&apos;s bankroll
+              caps you at ~Ξ{fmtUnits(bankrollMaxEth)}
+              {overBankroll ? ' — lower the ticket or stake more stock.' : '.'}
+            </p>
+          ) : null}
 
           <label className="mt-4 block">
             <span className="eyebrow">Ticket size (ETH)</span>
@@ -670,10 +762,26 @@ function TicketSection({
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={onBuy}
-              disabled={!isConnected || busy || ticketWei == null || ticketWei === 0n || overCap}
+              disabled={
+                !isConnected ||
+                busy ||
+                phase === 'spinning' ||
+                ticketWei == null ||
+                ticketWei === 0n ||
+                overCap ||
+                overBankroll
+              }
               className="pill-lime disabled:opacity-50"
             >
-              {isConnected ? 'Pull the machine' : 'Connect to play'}
+              {!isConnected
+                ? 'Connect to play'
+                : busy
+                  ? 'Confirm in wallet…'
+                  : phase === 'spinning'
+                    ? 'Rolling…'
+                    : overBankroll
+                      ? 'Ticket over bankroll'
+                      : 'Pull the machine'}
             </button>
           </div>
           {streak.data != null && streak.data > 0n ? (
@@ -884,15 +992,22 @@ type Round = {
 // Mirrors DegenRoll.Status — Open = 0, Settled = 1, Refunded = 2.
 const ROUND_STATUS = ['open', 'settled', 'refunded'] as const;
 
-function useMyRounds(machine: Address) {
+/**
+ * @param live Poll hard while a roll is in flight — the keeper settles it, so
+ *   this is the path the outcome arrives on.
+ */
+function useMyRounds(machine: Address, live = false) {
   const { address } = useAccount();
   const { chainId } = useContracts();
   const client = usePublicClient();
   return useQuery({
     queryKey: ['pitRounds', chainId, machine, address ?? '0x0'],
     enabled: Boolean(client && address),
-    refetchInterval: 15_000,
-    queryFn: async (): Promise<{ rounds: Round[]; lastSettled: { milliX: bigint; prize: bigint } | null }> => {
+    refetchInterval: live ? 1_500 : 15_000,
+    queryFn: async (): Promise<{
+      rounds: Round[];
+      lastSettled: { roundId: bigint; milliX: bigint; prize: bigint } | null;
+    }> => {
       const logs = await client!.getLogs({
         address: machine,
         event: BOUGHT_EVENT,
@@ -925,7 +1040,7 @@ function useMyRounds(machine: Address) {
         };
       });
 
-      let lastSettled: { milliX: bigint; prize: bigint } | null = null;
+      let lastSettled: { roundId: bigint; milliX: bigint; prize: bigint } | null = null;
       try {
         const settled = await client!.getLogs({
           address: machine,
@@ -934,8 +1049,12 @@ function useMyRounds(machine: Address) {
           fromBlock: 0n,
         });
         const last = settled[settled.length - 1];
-        if (last?.args.milliX != null) {
-          lastSettled = { milliX: last.args.milliX, prize: last.args.prize ?? 0n };
+        if (last?.args.milliX != null && last.args.roundId != null) {
+          lastSettled = {
+            roundId: last.args.roundId,
+            milliX: last.args.milliX,
+            prize: last.args.prize ?? 0n,
+          };
         }
       } catch {
         lastSettled = null;
