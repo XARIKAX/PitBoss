@@ -87,7 +87,17 @@ function bigintWei(name: string, fallback: bigint): bigint {
 
 function addr(name: string): Address | undefined {
   const v = opt(name);
-  return v ? getAddress(v) : undefined;
+  if (v === undefined) return undefined;
+  try {
+    return getAddress(v);
+  } catch {
+    // viem's InvalidAddressError names the bad value but not where it came from,
+    // which turns one typo'd variable into a stack-trace hunt across eight of them.
+    throw new Error(
+      `env ${name} is not a valid address: ${JSON.stringify(v)} ` +
+        `(expected 0x + 40 hex characters, checksummed)`,
+    );
+  }
 }
 
 /** Read and checksum every address in the committed deployments file, if any. */
