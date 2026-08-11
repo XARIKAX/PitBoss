@@ -400,7 +400,7 @@ function useOpenSpins(wheelAddr: Address) {
     refetchInterval: 15_000,
     queryFn: async (): Promise<{
       spins: OpenSpin[];
-      lastSettled: { pocket: bigint; win: boolean; prize: bigint } | null;
+      lastSettled: {spinId: bigint; pocket: bigint; win: boolean; prize: bigint } | null;
     }> => {
       const logs = await client!.getLogs({
         address: wheelAddr,
@@ -436,7 +436,8 @@ function useOpenSpins(wheelAddr: Address) {
         };
       });
 
-      let lastSettled: { pocket: bigint; win: boolean; prize: bigint } | null = null;
+      let lastSettled: {spinId: bigint; pocket: bigint; win: boolean; prize: bigint } | null =
+        null;
       try {
         const settled = await client!.getLogs({
           address: wheelAddr,
@@ -445,8 +446,9 @@ function useOpenSpins(wheelAddr: Address) {
           fromBlock: 0n,
         });
         const last = settled[settled.length - 1];
-        if (last?.args.pocket != null) {
+        if (last?.args.pocket != null && last.args.spinId != null) {
           lastSettled = {
+            spinId: last.args.spinId,
             pocket: last.args.pocket,
             win: last.args.win ?? false,
             prize: last.args.prize ?? 0n,
@@ -682,11 +684,17 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
   const [result, setResult] = useState<{ win: boolean; pocket: number; prize: bigint } | null>(null);
   const [showModal, setShowModal] = useState(false);
 
+  /** Spin ids whose outcome the player has already been shown. */
+  const seenSettleId = useRef<bigint | null>(null);
+  const primed = useRef(false);
+
   // Reset visual when switching wheels.
   useEffect(() => {
     setSpinning(false);
     setResult(null);
     setShowModal(false);
+    seenSettleId.current = null;
+    primed.current = false;
   }, [wheel.address]);
 
   /** Animate the wheel to the landed pocket and show the result modal. */
@@ -704,6 +712,38 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
       setShowModal(true);
     }, 4900);
   }
+
+  /**
+   * Show a spin's outcome exactly once, whoever settled it. Both paths funnel
+   * here: the player pressing Settle, and the poll below noticing the keeper got
+   * there first.
+   */
+  function showResult(spinId: bigint, pocket: number, win: boolean, prize: bigint) {
+    if (seenSettleId.current === spinId) return;
+    seenSettleId.current = spinId;
+    animateTo(pocket, win, prize);
+  }
+
+  /**
+   * The settle keeper usually beats the player to it, so the outcome has to
+   * arrive by polling rather than from the player's own transaction receipt. The
+   * first response only primes `seenSettleId` — otherwise revisiting the page
+   * would replay the last historical result as if it just happened.
+   */
+  useEffect(() => {
+    const data = spinsQ.data;
+    if (!data) return;
+    const last = data.lastSettled;
+    if (!primed.current) {
+      primed.current = true;
+      seenSettleId.current = last?.spinId ?? null;
+      return;
+    }
+    if (!last) return;
+    showResult(last.spinId, Number(last.pocket), last.win, last.prize);
+    // showResult/animateTo are stable within a render pass; keyed on the query data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spinsQ.data]);
 
   const winCell = result && !spinning ? result.pocket : null;
 
@@ -726,7 +766,7 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
         wheel={wheel}
         ref_={ref}
         q={spinsQ}
-        animateTo={animateTo}
+        showResult={showResult}
         setSpinning={setSpinning}
       />
       <BankrollSection wheel={wheel} ref_={ref} />
@@ -1153,13 +1193,13 @@ function OpenSpinsSection({
   wheel,
   ref_,
   q,
-  animateTo,
+  showResult,
   setSpinning,
 }: {
   wheel: WheelInfo;
   ref_: ContractRef;
   q: ReturnType<typeof useOpenSpins>;
-  animateTo: (pocket: number, win: boolean, prize: bigint) => void;
+  showResult: (spinId: bigint, pocket: number, win: boolean, prize: bigint) => void;
   setSpinning: (v: boolean) => void;
 }) {
   const { isConnected } = useAccount();
@@ -1190,11 +1230,11 @@ function OpenSpinsSection({
         const pocket = Number(ev.args.pocket);
         const win = ev.args.win ?? false;
         const prize = ev.args.prize ?? 0n;
-        animateTo(pocket, win, prize);
+        showResult(spinId, pocket, win, prize);
         return;
       }
     } catch {
-      // fall through — reads refetch anyway
+      // fall through — the poll will surface the outcome instead
     }
     setSpinning(false);
   }
