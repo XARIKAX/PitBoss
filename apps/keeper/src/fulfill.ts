@@ -36,6 +36,10 @@ const BOT = "fulfill";
 const LOOKBACK_BLOCKS = BigInt(process.env.SETTLE_LOOKBACK_BLOCKS ?? "50000");
 // Blockhash is observable for ~256 blocks after the target; leave a safety buffer.
 const WINDOW = BigInt(process.env.SETTLE_WINDOW_BLOCKS ?? "256");
+// Refresh conductor liveness this many seconds after the last fulfillment. Must
+// stay well under the contract's 30-minute STALL_WINDOW so a slow beat (commit,
+// wait ~3 blocks, fulfill) still lands before games start rejecting bets.
+const HEARTBEAT_AFTER_SECS = BigInt(process.env.HEARTBEAT_AFTER_SECS ?? "600");
 
 type Clients = ReturnType<typeof makeClients>;
 type Logger = ReturnType<typeof createLogger>;
@@ -134,12 +138,113 @@ function entropyId(consumer: Address, roundId: bigint): Hex {
   );
 }
 
+/**
+ * Conductor liveness heartbeat.
+ *
+ * `healthy()` is `now - lastFulfillAt <= 30 minutes`, and only `fulfill()` moves
+ * `lastFulfillAt`. Games refuse new bets when the conductor is unhealthy, so on a
+ * quiet chain the protocol deadlocks: no bets -> no fulfillments -> unhealthy ->
+ * no bets. The keeper breaks the cycle by running its own commit/fulfill pair,
+ * which is exactly the liveness `healthy()` is meant to measure — the keeper can
+ * still land entropy.
+ *
+ * Commitments are namespaced by msg.sender on the conductor, so the keeper's ids
+ * never collide with a game's. A beat spans ticks: commit, then retry fulfill on
+ * each subsequent tick until it simulates clean. Readiness is decided by
+ * simulating rather than by comparing block numbers, because Solidity's
+ * `block.number` and `eth_blockNumber` live in different spaces on Orbit chains
+ * (L1 vs L2) and are not comparable.
+ */
+type Beat = {id: Hex; attempts: number};
+const pendingBeats = new Map<Address, Beat>();
+// Give up on a beat after this many ticks and commit a fresh one — the target
+// hash may have aged out of the conductor's 256-block observable window.
+const MAX_BEAT_ATTEMPTS = Number(process.env.HEARTBEAT_MAX_ATTEMPTS ?? "40");
+
+function beatId(nonce: bigint): Hex {
+  return keccak256(
+    encodeAbiParameters([{type: "string"}, {type: "uint256"}], ["pitboss-keeper-heartbeat", nonce]),
+  );
+}
+
+async function heartbeat(
+  publicClient: Clients["publicClient"],
+  wallet: ReturnType<typeof requireWallet>,
+  cfg: Config,
+  conductor: Address,
+  head: bigint,
+  log: Logger,
+): Promise<void> {
+  const {walletClient, account} = wallet;
+
+  const pending = pendingBeats.get(conductor);
+  if (pending) {
+    try {
+      const {request} = await publicClient.simulateContract({
+        address: conductor,
+        abi: entropyConductorAbi,
+        functionName: "fulfill",
+        args: [pending.id],
+        account,
+      });
+      const hash = await walletClient.writeContract(request);
+      await publicClient.waitForTransactionReceipt({hash, confirmations: cfg.confirmations});
+      pendingBeats.delete(conductor);
+      log.info("heartbeat landed", {conductor, tx: hash});
+    } catch (err) {
+      pending.attempts += 1;
+      if (pending.attempts >= MAX_BEAT_ATTEMPTS) {
+        pendingBeats.delete(conductor);
+        log.warn("heartbeat abandoned, will re-commit", {
+          conductor,
+          attempts: pending.attempts,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } else {
+        log.debug("heartbeat not ready yet", {conductor, attempts: pending.attempts});
+      }
+    }
+    return;
+  }
+
+  const lastFulfillAt = (await publicClient.readContract({
+    address: conductor,
+    abi: entropyConductorAbi,
+    functionName: "lastFulfillAt",
+  })) as bigint;
+  const age = BigInt(Math.floor(Date.now() / 1000)) - lastFulfillAt;
+  if (age < HEARTBEAT_AFTER_SECS) return; // still fresh
+
+  // `head` only namespaces the id so repeat beats never reuse a commitment slot;
+  // readyAt = now gives the shortest possible delay to the target block.
+  const id = beatId(head);
+  try {
+    const {request} = await publicClient.simulateContract({
+      address: conductor,
+      abi: entropyConductorAbi,
+      functionName: "commit",
+      args: [id, BigInt(Math.floor(Date.now() / 1000))],
+      account,
+    });
+    const hash = await walletClient.writeContract(request);
+    await publicClient.waitForTransactionReceipt({hash, confirmations: cfg.confirmations});
+    pendingBeats.set(conductor, {id, attempts: 0});
+    log.info("heartbeat committed", {conductor, ageSecs: age.toString(), tx: hash});
+  } catch (err) {
+    log.warn("heartbeat commit failed", {
+      conductor,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 async function settleGame(
   publicClient: Clients["publicClient"],
   wallet: ReturnType<typeof requireWallet>,
   cfg: Config,
   game: Game,
-  conductor: Address,
+  fallbackConductor: Address | undefined,
+  conductorsSeen: Set<Address>,
   fromBlock: bigint,
   head: bigint,
   backoff: Backoff,
@@ -155,6 +260,22 @@ async function settleGame(
 
   for (const consumer of consumers) {
     if (stopping()) break;
+
+    // Read the conductor off the consumer itself — the deployments file can lag
+    // behind what the deployed games are actually wired to.
+    let conductor = fallbackConductor;
+    try {
+      conductor = (await publicClient.readContract({
+        address: consumer,
+        abi: game.abi,
+        functionName: "conductor",
+      })) as Address;
+    } catch {
+      // Older build without the getter — fall back to the configured address.
+    }
+    if (!conductor) continue;
+    conductorsSeen.add(conductor);
+
     const ids = await openRounds(publicClient, consumer, game, fromBlock, head, backoff, log);
     open += ids.length;
 
@@ -162,7 +283,11 @@ async function settleGame(
       if (stopping()) break;
       const id = entropyId(consumer, roundId);
 
-      let target: bigint;
+      // Advisory only. `head` comes from eth_blockNumber while `target` derives
+      // from Solidity's block.number, and on Orbit chains those are different
+      // spaces (L2 vs L1) — so this cannot gate the settle. The simulate below is
+      // the real readiness check; this read only enriches the aged-out warning.
+      let target: bigint | null = null;
       try {
         target = (await publicClient.readContract({
           address: conductor,
@@ -174,23 +299,7 @@ async function settleGame(
         continue; // no commitment (shouldn't happen for an open round) — skip
       }
 
-      if (head <= target) {
-        pending++;
-        continue; // target block not mined yet
-      }
-      if (head > target + WINDOW) {
-        aged++;
-        log.warn("round aged past blockhash window — refundable after 48h", {
-          game: game.name,
-          consumer,
-          roundId: roundId.toString(),
-          target: target.toString(),
-          head: head.toString(),
-        });
-        continue;
-      }
-
-      // In window: settle through the consumer (lands the word + resolves).
+      // Settle through the consumer (lands the word + resolves).
       try {
         const {request} = await publicClient.simulateContract({
           address: consumer,
@@ -204,12 +313,27 @@ async function settleGame(
         await publicClient.waitForTransactionReceipt({hash, confirmations: cfg.confirmations});
         settled++;
       } catch (err) {
-        // Word not landed at target yet, or lost a race — retry next tick.
-        log.debug("settle skipped (not ready or race)", {
-          game: game.name,
-          roundId: roundId.toString(),
-          error: err instanceof Error ? err.message : String(err),
-        });
+        // Not ready yet, aged out of the blockhash window, or lost a race. The
+        // first is normal and clears on a later tick; only warn once a round is
+        // old enough that the hash is likely gone for good.
+        pending++;
+        const staleBlocks = target === null ? 0n : head > target ? head - target : 0n;
+        if (staleBlocks > WINDOW) {
+          aged++;
+          log.warn("round may have aged past blockhash window — refundable after 48h", {
+            game: game.name,
+            consumer,
+            roundId: roundId.toString(),
+            target: target?.toString(),
+            head: head.toString(),
+          });
+        } else {
+          log.debug("settle skipped (not ready or race)", {
+            game: game.name,
+            roundId: roundId.toString(),
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
   }
@@ -223,8 +347,9 @@ async function main() {
   const {publicClient} = clients;
   const wallet = requireWallet(clients); // fail fast if no signer
 
-  const conductor = cfg.addresses.conductor;
-  if (!conductor) throw new Error("CONDUCTOR_ADDRESS / deployments EntropyConductor not set");
+  // Advisory only — the real conductor is read off each consumer below. Kept as a
+  // fallback for builds whose games predate the `conductor()` getter.
+  const fallbackConductor = cfg.addresses.conductor;
 
   const games: Game[] = [
     {
@@ -255,10 +380,11 @@ async function main() {
 
   const rpcBackoff = new Backoff({maxMs: cfg.maxBackoffMs});
   log.info("settle keeper up", {
-    conductor,
+    fallbackConductor: fallbackConductor ?? "(none)",
     degen: cfg.addresses.factory ?? "(none)",
     roulette: cfg.addresses.rouletteFactory ?? "(none)",
     window: WINDOW.toString(),
+    heartbeatAfterSecs: HEARTBEAT_AFTER_SECS.toString(),
   });
 
   await runLoop(cfg, log, async (ctx) => {
@@ -271,6 +397,7 @@ async function main() {
     const fromBlock = head > LOOKBACK_BLOCKS ? head - LOOKBACK_BLOCKS : 0n;
 
     let totals = {open: 0, settled: 0, aged: 0, pending: 0};
+    const conductorsSeen = new Set<Address>();
     for (const game of games) {
       if (ctx.stopping()) break;
       if (!game.factory) continue;
@@ -279,7 +406,8 @@ async function main() {
         wallet,
         cfg,
         game,
-        conductor,
+        fallbackConductor,
+        conductorsSeen,
         fromBlock,
         head,
         rpcBackoff,
@@ -294,7 +422,18 @@ async function main() {
       };
     }
 
-    log.info("tick complete", {...totals, head: head.toString()});
+    // Keep every conductor the games depend on above the stall window, so bets
+    // stay open on a quiet chain.
+    for (const conductor of conductorsSeen) {
+      if (ctx.stopping()) break;
+      await heartbeat(publicClient, wallet, cfg, conductor, head, log);
+    }
+
+    log.info("tick complete", {
+      ...totals,
+      head: head.toString(),
+      conductors: conductorsSeen.size,
+    });
   });
 }
 

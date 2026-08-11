@@ -37,6 +37,27 @@ export const entropyConductorAbi = [
     outputs: [{type: "bool"}],
   },
   {
+    // Liveness timestamp behind healthy(). The heartbeat reads it to decide when
+    // to refresh, rather than waiting for healthy() to already be false.
+    type: "function",
+    name: "lastFulfillAt",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{type: "uint64"}],
+  },
+  {
+    // Commitments are namespaced by msg.sender, so the keeper's own heartbeat
+    // commit/fulfill pair can never collide with a game's commitment ids.
+    type: "function",
+    name: "commit",
+    stateMutability: "nonpayable",
+    inputs: [
+      {name: "id", type: "bytes32"},
+      {name: "readyAt", type: "uint64"},
+    ],
+    outputs: [],
+  },
+  {
     // MinerEntropyConductor: the target block whose hash seeds a consumer's
     // commitment. Lets the settle keeper know when a round is ready and by which
     // block it must settle (before target + ~256 ages the hash out).
@@ -151,6 +172,16 @@ export const degenRollAbi = [
   {
     type: "function",
     name: "stock",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{type: "address"}],
+  },
+  {
+    // Immutable conductor this machine gates spins on. Read on-chain so the
+    // keeper heartbeats the conductor the games actually use, even if the
+    // deployments file drifts.
+    type: "function",
+    name: "conductor",
     stateMutability: "view",
     inputs: [],
     outputs: [{type: "address"}],
@@ -349,6 +380,13 @@ export const rouletteWheelFactoryAbi = [
 // restock handles both. Rounds are "spins" here.
 export const rouletteWheelAbi = [
   {type: "function", name: "stock", stateMutability: "view", inputs: [], outputs: [{type: "address"}]},
+  {
+    type: "function",
+    name: "conductor",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{type: "address"}],
+  },
   {type: "function", name: "ethFloat", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
   {type: "function", name: "totalReserved", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
   {type: "function", name: "freeStock", stateMutability: "view", inputs: [], outputs: [{type: "uint256"}]},
