@@ -610,6 +610,63 @@ function EntropyBadge({ wheel }: { wheel: ContractRef }) {
   );
 }
 
+// ── ResultModal ───────────────────────────────────────────────────────────────
+
+function ResultModal({
+  result,
+  symbol,
+  onClose,
+}: {
+  result: { win: boolean; pocket: number; prize: bigint };
+  symbol: string;
+  onClose: () => void;
+}) {
+  const hue = hueOf(result.pocket);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative mx-4 w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d1117] p-8 text-center shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Pocket */}
+        <div
+          className="mx-auto mb-4 grid h-24 w-24 place-items-center rounded-full text-5xl font-bold text-white shadow-lg"
+          style={{ background: cellBg(hue) }}
+        >
+          {result.pocket}
+        </div>
+        <p className="mb-5 font-mono text-xs uppercase tracking-widest text-mute">{hue}</p>
+
+        {result.win ? (
+          <>
+            <p className="mb-2 text-4xl font-bold tracking-tight text-lime">WIN!</p>
+            <p className="font-mono text-xl font-semibold text-white">
+              +{Number(formatEther(result.prize)).toFixed(4)}{' '}
+              <span className="text-lime">{symbol}</span>
+            </p>
+            <p className="mt-1 text-xs text-mute">Stock transferred to your wallet</p>
+          </>
+        ) : (
+          <>
+            <p className="mb-2 text-4xl font-bold tracking-tight text-mute">MISSED</p>
+            <p className="text-sm text-mute">Your stake feeds the bankroll restock</p>
+          </>
+        )}
+
+        <button
+          onClick={onClose}
+          className="mt-8 w-full rounded-xl border border-white/10 py-3 text-sm font-medium text-mute transition hover:border-white/20 hover:text-white"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── WheelPanels — spin + open spins + bankroll ────────────────────────────────
 
 function WheelPanels({ wheel }: { wheel: WheelInfo }) {
@@ -623,17 +680,20 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
   const [ballRotation, setBallRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<{ win: boolean; pocket: number; prize: bigint } | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   // Reset visual when switching wheels.
   useEffect(() => {
     setSpinning(false);
     setResult(null);
+    setShowModal(false);
   }, [wheel.address]);
 
-  /** Animate the wheel to the landed pocket and show the result. */
+  /** Animate the wheel to the landed pocket and show the result modal. */
   function animateTo(pocket: number, win: boolean, prize: bigint) {
     setSpinning(true);
     setResult(null);
+    setShowModal(false);
     const idx = WHEEL_ORDER.indexOf(pocket);
     const mid = idx * SEG + SEG / 2;
     setRotation((r) => Math.ceil(r / 360) * 360 + 360 * 6 + ((360 - mid) % 360));
@@ -641,6 +701,7 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
     window.setTimeout(() => {
       setResult({ win, pocket, prize });
       setSpinning(false);
+      setShowModal(true);
     }, 4900);
   }
 
@@ -648,6 +709,9 @@ function WheelPanels({ wheel }: { wheel: WheelInfo }) {
 
   return (
     <>
+      {showModal && result && (
+        <ResultModal result={result} symbol={wheel.symbol} onClose={() => setShowModal(false)} />
+      )}
       <SpinSection
         wheel={wheel}
         ref_={ref}
@@ -1174,7 +1238,7 @@ function OpenSpinsSection({
                       disabled={busy || !ready}
                       className="pill-lime disabled:opacity-50"
                     >
-                      Settle · spin it
+                      {busy ? 'Settling…' : ready ? 'Settle · spin it' : 'Waiting for entropy'}
                     </button>
                     <button
                       onClick={() => settleWithAnimation('sealIntoCertificate', s.spinId)}
