@@ -287,6 +287,10 @@ async function settleGame(
       // from Solidity's block.number, and on Orbit chains those are different
       // spaces (L2 vs L1) — so this cannot gate the settle. The simulate below is
       // the real readiness check; this read only enriches the aged-out warning.
+      // Never skip the round on a failed read: targetBlockFor is declared only on
+      // MinerEntropyConductor, so against any other conductor this reverts every
+      // time and a `continue` here would silently skip every round forever while
+      // the tick still reported settled: 0 as though there were nothing to do.
       let target: bigint | null = null;
       try {
         target = (await publicClient.readContract({
@@ -296,7 +300,7 @@ async function settleGame(
           args: [consumer, id],
         })) as bigint;
       } catch {
-        continue; // no commitment (shouldn't happen for an open round) — skip
+        target = null; // conductor doesn't expose it — the simulate still decides
       }
 
       // Settle through the consumer (lands the word + resolves).
