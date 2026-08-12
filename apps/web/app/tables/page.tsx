@@ -20,6 +20,7 @@ import { ABIS, readMany, safeRead, useContracts } from '@/lib/contracts';
 import { isDeployed } from '@/lib/deployments';
 import { shortAddr } from '@/lib/format';
 import { explorerAddress, PRIMARY_CHAIN } from '@/config/chains';
+import { PARTNERS, PartnerTable } from '@/components/PartnerTable';
 
 type Table = {
   address: Address;
@@ -201,6 +202,15 @@ export default function TablesPage() {
         emphasis="an owner."
         lede="Each game on the floor is deployed with an immutable creator address that takes a cut of every bet placed at it, forever. Some are ours. The rest are open to projects who want a revenue stream without building a casino."
       />
+
+      {/* ---- featured partner tables ---- */}
+      <Section label="Featured" title="Partner" emphasis="tables.">
+        <div className="space-y-4">
+          {PARTNERS.map((p) => (
+            <PartnerTable key={p.key} p={p} chainId={chainId} />
+          ))}
+        </div>
+      </Section>
 
       {/* ---- live tables ---- */}
       <Section label="On the floor" title="Live" emphasis="tables.">
