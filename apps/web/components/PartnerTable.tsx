@@ -39,8 +39,8 @@ export const PARTNERS: Partner[] = [
   {
     key: 'stonkbrokers',
     name: 'StonkBrokers',
-    handle: '@StonkBrokers',
-    href: 'https://x.com/StonkBrokers',
+    handle: '@ClutchMarkets',
+    href: 'https://x.com/ClutchMarkets',
     blurb: 'Brokers work the market all day. This is where they play at night.',
     payout: 'NVDA',
     wheel: null,
