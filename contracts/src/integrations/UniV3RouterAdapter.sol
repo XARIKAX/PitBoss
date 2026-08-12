@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISwapRouter, IOracle} from "../interfaces/Support.sol";
 import {IUniV3Router, IWETH9} from "./external.sol";
 import {Errors} from "../lib/Errors.sol";
@@ -24,14 +26,21 @@ import {Errors} from "../lib/Errors.sol";
 ///         real V3 swap then enforces that `minOut` on-chain. A stalled oracle
 ///         reverts (fail-closed) rather than quoting a dead price.
 contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     IUniV3Router public immutable router;
     IWETH9 public immutable weth;
     IOracle public oracle;
     /// @notice token => V3-encoded route `WETH,fee,[mid,fee,]token`.
     mapping(address => bytes) public routeOf;
+    /// @notice token => V3-encoded route `token,fee,[mid,fee,]WETH`. A V3 path is
+    ///         directional, so selling a token needs its own route rather than the
+    ///         reverse of `routeOf`.
+    mapping(address => bytes) public sellRouteOf;
 
     event OracleSet(address oracle);
     event RouteSet(address indexed token, bytes path);
+    event SellRouteSet(address indexed token, bytes path);
 
     constructor(address router_, address weth_, address oracle_, address owner_) Ownable(owner_) {
         if (router_ == address(0) || weth_ == address(0) || oracle_ == address(0)) revert Errors.ZeroAddress();
@@ -70,6 +79,28 @@ contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
         emit RouteSet(token, path);
     }
 
+    /// @notice Set a raw V3 sell path for `token`. Must start at `token` and end at
+    ///         WETH — the mirror of `setRoute`, used by `swapExactTokensForETH`.
+    function setSellRoute(address token, bytes calldata path) external onlyOwner {
+        sellRouteOf[token] = path;
+        emit SellRouteSet(token, path);
+    }
+
+    /// @notice Convenience: a two-hop sell route `token -feeIn-> mid -feeOut-> WETH`.
+    function setSellRouteVia(address token, address mid, uint24 feeIn, uint24 feeOut) external onlyOwner {
+        bytes memory path = abi.encodePacked(token, feeIn, mid, feeOut, address(weth));
+        sellRouteOf[token] = path;
+        emit SellRouteSet(token, path);
+    }
+
+    /// @notice Convenience: a direct sell route `token -fee-> WETH`. $PITBOSS has a
+    ///         live WETH pool, so this is the shape it uses.
+    function setSellRouteDirect(address token, uint24 fee) external onlyOwner {
+        bytes memory path = abi.encodePacked(token, fee, address(weth));
+        sellRouteOf[token] = path;
+        emit SellRouteSet(token, path);
+    }
+
     // -------- ISwapRouter --------
     /// @inheritdoc ISwapRouter
     /// @dev Oracle-priced quote (view-safe). Execution enforces the caller's `minOut`.
@@ -103,5 +134,52 @@ contract UniV3RouterAdapter is ISwapRouter, Ownable, ReentrancyGuard {
             })
         );
         if (amountOut < minOut) revert Errors.InsufficientPayment(); // defensive
+    }
+
+    /// @inheritdoc ISwapRouter
+    /// @dev Oracle-priced quote (view-safe). Execution enforces the caller's `minOut`.
+    function quoteTokensForETH(address tokenIn, uint256 amountIn) external view returns (uint256) {
+        uint256 px = oracle.ethPerToken(tokenIn); // eth-wei per 1e18 token
+        return (amountIn * px) / 1e18;
+    }
+
+    /// @inheritdoc ISwapRouter
+    /// @dev $PITBOSS taxes transfers, so the amount that lands here is smaller than
+    ///      `amountIn`. Swap the delivered balance rather than the requested one, or
+    ///      the router would try to sell tokens it never received.
+    function swapExactTokensForETH(address tokenIn, uint256 amountIn, uint256 minOut, address to)
+        external
+        nonReentrant
+        returns (uint256 amountOut)
+    {
+        if (amountIn == 0) revert Errors.ZeroAmount();
+        bytes memory path = sellRouteOf[tokenIn];
+        if (path.length == 0) revert Errors.InvalidConfig(); // no sell route configured
+
+        uint256 before = IERC20(tokenIn).balanceOf(address(this));
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        uint256 received = IERC20(tokenIn).balanceOf(address(this)) - before;
+        if (received == 0) revert Errors.ZeroAmount();
+
+        IERC20(tokenIn).forceApprove(address(router), received);
+        uint256 wethOut = router.exactInput(
+            IUniV3Router.ExactInputParams({
+                path: path,
+                recipient: address(this),
+                amountIn: received,
+                amountOutMinimum: minOut
+            })
+        );
+        if (wethOut < minOut) revert Errors.InsufficientPayment(); // defensive
+
+        weth.withdraw(wethOut);
+        (bool ok,) = to.call{value: wethOut}("");
+        if (!ok) revert Errors.InsufficientPayment();
+        amountOut = wethOut;
+    }
+
+    /// @dev Only to receive ETH from unwrapping WETH mid-swap.
+    receive() external payable {
+        if (msg.sender != address(weth)) revert Errors.NotAuthorized();
     }
 }

@@ -32,6 +32,18 @@ interface ISwapRouter {
 
     /// @notice Quote for `ethIn` -> `tokenOut` at current reserves (for minOut calc).
     function quoteETHForTokens(address tokenOut, uint256 ethIn) external view returns (uint256);
+
+    /// @notice Swap `amountIn` of `tokenIn` into ETH, requiring at least `minOut`.
+    ///         Sends the ETH to `to`. Returns amount out.
+    /// @dev    The caller must have approved this router for `amountIn`. Tokens that
+    ///         tax transfers deliver less than `amountIn` to the pool, so the router
+    ///         swaps whatever actually arrives.
+    function swapExactTokensForETH(address tokenIn, uint256 amountIn, uint256 minOut, address to)
+        external
+        returns (uint256 amountOut);
+
+    /// @notice Quote for `amountIn` of `tokenIn` -> ETH (for minOut calc).
+    function quoteTokensForETH(address tokenIn, uint256 amountIn) external view returns (uint256);
 }
 
 /// @title IOracle

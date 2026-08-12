@@ -26,6 +26,8 @@ contract DegenRollFactory is Ownable {
         address activation;
         address floor;
         address protocolReserve;
+        /// @notice $PITBOSS. Zero leaves PIT betting disabled on new machines.
+        address pit;
     }
 
     Wiring public wiring;
@@ -64,7 +66,8 @@ contract DegenRollFactory is Ownable {
                 w.activation,
                 w.floor,
                 creator,
-                w.protocolReserve
+                w.protocolReserve,
+                w.pit
             )
         );
         machineOf[stock] = machine;

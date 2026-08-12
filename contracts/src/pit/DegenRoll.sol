@@ -55,10 +55,13 @@ contract DegenRoll is ReentrancyGuard {
         uint64 readyAt;
         bytes32 entropyId;
         Status status;
+        uint256 escrowPit; // $PITBOSS stake when the ticket was bought in PIT, else 0
     }
 
     // -------- immutable wiring --------
     IERC20 public immutable stock;
+    /// @notice $PITBOSS. Zero disables PIT betting on this machine.
+    IERC20 public immutable pit;
     IEntropyConductor public immutable conductor;
     IHouseBook public immutable houseBook;
     IOracle public immutable oracle;
@@ -80,6 +83,12 @@ contract DegenRoll is ReentrancyGuard {
     uint64 public constant VAULT_DELAY = 10 minutes; // longer commit delay (anti-grind)
     uint64 public constant REFUND_WINDOW = 48 hours;
     uint256 public constant SELLBACK_BPS = 9500; // 95% of oracle mark
+    /// @notice Share of a $PITBOSS ticket burned outright, in bps. Set to the full
+    ///         house edge so a PIT player gets the SAME 90% return as an ETH player —
+    ///         the burn replaces the creator/book/protocol split rather than coming
+    ///         out of the stake. Burning more than the edge would make the bankroll
+    ///         insolvent, because prizes are paid at full notional. [CONFIG]
+    uint256 public constant PIT_BURN_BPS = 1000; // 10%
     uint256 public constant RESTOCK_SLIPPAGE_BPS = 300;
     uint256 public constant LOSS_STREAK_LEN = 5; // consecutive floor rolls
     uint256 public constant REBATE_BPS = 1000; // 10% of avg ticket
@@ -97,6 +106,7 @@ contract DegenRoll is ReentrancyGuard {
     uint256 public totalBankrollStock; // staked + earned, in stock units
     uint256 public totalReserved; // Σ open-round reserves (invariant: <= bankroll)
     uint256 public ethFloat; // net ticket ETH awaiting restock -> stock
+    uint256 public pitFloat; // settled $PITBOSS awaiting conversion -> ETH -> stock
     uint256 public totalShares;
     mapping(address => uint256) public shares;
 
@@ -111,6 +121,11 @@ contract DegenRoll is ReentrancyGuard {
     event Staked(address indexed staker, uint256 indexed bossId, uint256 amount, uint256 sharesOut);
     event Unstaked(address indexed staker, uint256 amount, uint256 sharesIn);
     event Restocked(address indexed keeper, uint256 ethIn, uint256 stockOut);
+    event BoughtWithPIT(
+        uint256 indexed roundId, address indexed player, uint256 stakePit, uint256 notional
+    );
+    event PitBurned(uint256 amount);
+    event PitRestocked(address indexed keeper, uint256 pitIn, uint256 ethOut);
     event RebateMinted(address indexed player, uint256 certId, uint256 amount);
 
     constructor(
@@ -124,9 +139,11 @@ contract DegenRoll is ReentrancyGuard {
         address activation_,
         address floor_,
         address creator_,
-        address protocolReserve_
+        address protocolReserve_,
+        address pit_
     ) {
         stock = IERC20(stock_);
+        pit = IERC20(pit_);
         conductor = IEntropyConductor(conductor_);
         houseBook = IHouseBook(houseBook_);
         oracle = IOracle(oracle_);
@@ -148,16 +165,41 @@ contract DegenRoll is ReentrancyGuard {
         uint256 t = msg.value;
         if (t == 0) revert Errors.ZeroAmount();
 
-        uint256 usd = (t * oracle.usdPerEth()) / 1e18; // 1e8-scaled
-        uint64 delay;
-        if (lane == Lane.Instant) {
-            if (usd > INSTANT_MAX_USD) revert Errors.InvalidConfig();
-            delay = INSTANT_DELAY;
-        } else {
-            delay = VAULT_DELAY;
-        }
+        _checkLaneCap(lane, t);
+        roundId = _open(lane, t, 0, _stockFor(t));
+    }
 
-        uint256 notional = _stockFor(t);
+    /// @notice Buy the same ticket staking $PITBOSS instead of ETH. Identical odds:
+    ///         the ticket is priced in stock at the oracle mark and pays from the
+    ///         same bankroll, and only the house edge is burned. The player must
+    ///         approve this machine for `pitAmount` first.
+    /// @dev    $PITBOSS taxes transfers, so everything downstream is denominated in
+    ///         the amount that actually arrives, never the amount requested.
+    function buyWithPIT(Lane lane, uint256 pitAmount) external nonReentrant returns (uint256 roundId) {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
+        if (!conductor.healthy()) revert Errors.FloorUnhealthy();
+        if (pitAmount == 0) revert Errors.ZeroAmount();
+
+        uint256 before = pit.balanceOf(address(this));
+        pit.safeTransferFrom(msg.sender, address(this), pitAmount);
+        uint256 received = pit.balanceOf(address(this)) - before;
+        if (received == 0) revert Errors.ZeroAmount();
+
+        // Value the ticket in ETH terms so the lane cap and the stock notional use
+        // exactly the same maths as an ETH ticket.
+        uint256 ethValue = (received * oracle.ethPerToken(address(pit))) / 1e18;
+        if (ethValue == 0) revert Errors.InvalidConfig();
+
+        _checkLaneCap(lane, ethValue);
+        roundId = _open(lane, 0, received, _stockFor(ethValue));
+    }
+
+    /// @dev Reserve, record and commit. Shared by both stake currencies so the
+    ///      reserve invariant can never diverge between them.
+    function _open(Lane lane, uint256 escrowEth_, uint256 escrowPit_, uint256 notional)
+        internal
+        returns (uint256 roundId)
+    {
         if (notional == 0) revert Errors.InvalidConfig();
         uint256 reserve = (notional * PrizeTable.maxMultiplierMilliX()) / PrizeTable.ONE_X;
         if (totalBankrollStock - totalReserved < reserve) revert Errors.ReserveShortfall();
@@ -165,19 +207,33 @@ contract DegenRoll is ReentrancyGuard {
 
         roundId = nextRoundId++;
         bytes32 id = keccak256(abi.encode(address(this), roundId));
-        uint64 readyAt = uint64(block.timestamp) + delay;
+        uint64 readyAt = uint64(block.timestamp) + delayFor(lane);
         rounds[roundId] = Round({
             player: msg.sender,
-            escrowEth: t,
+            escrowEth: escrowEth_,
             notional: notional,
             reserved: reserve,
             boughtAt: uint64(block.timestamp),
             readyAt: readyAt,
             entropyId: id,
-            status: Status.Open
+            status: Status.Open,
+            escrowPit: escrowPit_
         });
         conductor.commit(id, readyAt);
-        emit Bought(roundId, msg.sender, lane, t, notional);
+        emit Bought(roundId, msg.sender, lane, escrowEth_, notional);
+        if (escrowPit_ > 0) emit BoughtWithPIT(roundId, msg.sender, escrowPit_, notional);
+    }
+
+    /// @dev The Instant lane is capped in dollars, so both stake currencies are
+    ///      valued in ETH first and measured against the same ceiling.
+    function _checkLaneCap(Lane lane, uint256 ethValue) internal view {
+        if (lane != Lane.Instant) return;
+        uint256 usd = (ethValue * oracle.usdPerEth()) / 1e18; // 1e8-scaled
+        if (usd > INSTANT_MAX_USD) revert Errors.InvalidConfig();
+    }
+
+    function delayFor(Lane lane) public pure returns (uint64) {
+        return lane == Lane.Instant ? INSTANT_DELAY : VAULT_DELAY;
     }
 
     /// @notice Settle a fulfilled round, paying the prize as stock to the player's
@@ -204,7 +260,11 @@ contract DegenRoll is ReentrancyGuard {
         totalReserved -= r.reserved; // release worst-case hold
 
         // Split edge from escrow; net feeds the restock float.
-        _splitEdge(r.escrowEth);
+        if (r.escrowPit > 0) {
+            _splitPit(r.escrowPit);
+        } else {
+            _splitEdge(r.escrowEth);
+        }
 
         // Pay prize from bankroll (guaranteed solvent by the reserve invariant).
         totalBankrollStock -= prize;
@@ -228,6 +288,14 @@ contract DegenRoll is ReentrancyGuard {
 
         r.status = Status.Refunded;
         totalReserved -= r.reserved;
+        // Refund in whatever was staked. Nothing has been burned or converted yet —
+        // that only happens at settle — so the escrow is still intact either way.
+        if (r.escrowPit > 0) {
+            uint256 pitAmount = r.escrowPit;
+            pit.safeTransfer(r.player, pitAmount);
+            emit Refunded(roundId, r.player, pitAmount);
+            return;
+        }
         uint256 amount = r.escrowEth;
         (bool ok,) = r.player.call{value: amount}("");
         if (!ok) revert Errors.InsufficientPayment();
@@ -307,6 +375,41 @@ contract DegenRoll is ReentrancyGuard {
         stockOut = router.swapExactETHForTokens{value: ethIn}(address(stock), minOut, address(this));
         totalBankrollStock += stockOut;
         emit Restocked(msg.sender, ethIn, stockOut);
+    }
+
+    /// @notice Convert settled $PITBOSS into ETH, which `restock` then turns into
+    ///         bankroll stock. Permissionless keeper action, same as `restock`.
+    /// @dev    Split in two so the PIT->ETH leg and the ETH->stock leg each carry
+    ///         their own slippage bound instead of compounding inside one call.
+    function restockPit() external nonReentrant returns (uint256 ethOut) {
+        uint256 pitIn = pitFloat;
+        if (pitIn == 0) revert Errors.ZeroAmount();
+        uint256 quote = router.quoteTokensForETH(address(pit), pitIn);
+        uint256 minOut = (quote * (10_000 - RESTOCK_SLIPPAGE_BPS)) / 10_000;
+        pitFloat = 0;
+
+        // The machine's own `receive()` credits ethFloat, so route the proceeds here
+        // and let the existing ETH path do the rest.
+        pit.forceApprove(address(router), pitIn);
+        ethOut = router.swapExactTokensForETH(address(pit), pitIn, minOut, address(this));
+        emit PitRestocked(msg.sender, pitIn, ethOut);
+    }
+
+    /// @dev The $PITBOSS mirror of `_splitEdge`. The whole 10% edge is burned rather
+    ///      than split to creator/book/protocol, so a PIT player gets the same 90%
+    ///      return as an ETH player while permanently removing supply. The remaining
+    ///      90% becomes stock via `restockPit` -> `restock`, which is what keeps the
+    ///      bankroll solvent against prizes paid at full notional.
+    function _splitPit(uint256 stakePit) internal {
+        uint256 burn = (stakePit * PIT_BURN_BPS) / 10_000;
+        uint256 net = stakePit - burn;
+        pitFloat += net;
+        if (burn > 0) {
+            // $PITBOSS exposes no burn(); the dead address is the sink used
+            // everywhere else in the protocol (see ActivationManager).
+            pit.safeTransfer(DEAD, burn);
+            emit PitBurned(burn);
+        }
     }
 
     // ==================== views ====================

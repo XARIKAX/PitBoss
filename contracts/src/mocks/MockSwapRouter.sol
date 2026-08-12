@@ -33,4 +33,28 @@ contract MockSwapRouter is ISwapRouter {
         if (amountOut < minOut) revert SlippageExceeded();
         MockStockToken(tokenOut).mint(to, amountOut);
     }
+
+    function quoteTokensForETH(address tokenIn, uint256 amountIn) public view returns (uint256) {
+        uint256 px = oracle.ethPerToken(tokenIn); // eth-wei per 1e18 token
+        return (amountIn * px) / 1e18;
+    }
+
+    /// @dev Burns the input to this router and pays out of its own ETH balance, so a
+    ///      test must fund it first. Mirrors the adapter's taxed-token handling by
+    ///      pricing whatever actually arrives.
+    function swapExactTokensForETH(address tokenIn, uint256 amountIn, uint256 minOut, address to)
+        external
+        returns (uint256 amountOut)
+    {
+        uint256 before = IERC20(tokenIn).balanceOf(address(this));
+        IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+        uint256 received = IERC20(tokenIn).balanceOf(address(this)) - before;
+
+        amountOut = quoteTokensForETH(tokenIn, received);
+        if (amountOut < minOut) revert SlippageExceeded();
+        (bool ok,) = to.call{value: amountOut}("");
+        if (!ok) revert SlippageExceeded();
+    }
+
+    receive() external payable {}
 }
