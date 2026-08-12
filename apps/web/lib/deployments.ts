@@ -99,7 +99,13 @@ function mapRaw(raw: Record<string, unknown>): Partial<DeploymentMap> {
     const v = raw[pascal];
     if (typeof v === 'string' && v.startsWith('0x')) (out as Record<string, unknown>)[camel] = v;
   }
-  if (typeof raw.StockSample === 'string' && raw.StockSample.startsWith('0x')) {
+  // Only surface a sample stock when it is a real address — a zero placeholder
+  // here used to shadow the configured reward stocks (NVDA/TSLA/AAPL).
+  if (
+    typeof raw.StockSample === 'string' &&
+    raw.StockSample.startsWith('0x') &&
+    raw.StockSample !== PLACEHOLDER
+  ) {
     out.stockTokens = { tNVDA: raw.StockSample as Address };
   }
   return out;
