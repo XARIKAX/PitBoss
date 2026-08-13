@@ -40,6 +40,9 @@ export const IconLoans = (p: SVGProps<SVGSVGElement>) => (
 export const IconBook = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M5 4.5h9a3 3 0 0 1 3 3V21a2.5 2.5 0 0 0-2.5-2.5H5Z" /><path d="M19 6.5V21" /><path d="M8 8.5h6M8 11.5h6" /></svg>
 );
+export const IconRewards = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 3.5 14.4 8.6l5.6.8-4 3.9.9 5.6-4.9-2.6-4.9 2.6.9-5.6-4-3.9 5.6-.8Z" /></svg>
+);
 export const IconSeasons = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M7 4h10v3a5 5 0 0 1-10 0Z" /><path d="M7 5H4.5v1.5A2.5 2.5 0 0 0 7 9M17 5h2.5v1.5A2.5 2.5 0 0 1 17 9" /><path d="M12 12v3M9 20h6M10 17h4l.5 3h-5Z" /></svg>
 );
