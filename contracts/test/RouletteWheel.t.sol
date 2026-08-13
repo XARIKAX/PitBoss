@@ -25,7 +25,8 @@ contract RouletteWheelTest is TestBase {
             address(activation),
             address(floor),
             creator,
-            protocolReserve
+            protocolReserve,
+            address(pit)
         );
         cert.setIssuer(address(wheel), true);
         floor.setBumper(address(wheel), true);
