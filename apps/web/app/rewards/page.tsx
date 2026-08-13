@@ -2,7 +2,7 @@
 
 import { useAccount, usePublicClient } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
-import { formatEther, parseAbiItem, type Address } from 'viem';
+import { encodeFunctionData, formatEther, parseAbiItem, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { ABIS, readMany, useContracts, useRead } from '@/lib/contracts';
@@ -97,6 +97,19 @@ function useDelivered() {
   });
 }
 
+/**
+ * Something a Boss's account holds. Rewards arrive as ETH by default, but a Boss
+ * with an election set has its ETH swapped into the elected tokens on the way in
+ * (HouseBook.deliver), so the account can hold stock instead — and a withdraw
+ * that only knew about ETH would show those holders nothing to claim.
+ */
+type BossAsset = {
+  /** null = native ETH, otherwise the ERC-20 address. */
+  token: Address | null;
+  symbol: string;
+  balance: bigint;
+};
+
 type MyBoss = {
   tokenId: bigint;
   /** Credited in the House Book, not yet delivered. */
@@ -104,8 +117,8 @@ type MyBoss = {
   activated: boolean;
   /** The Boss's token-bound account — where delivered rewards actually land. */
   tba: Address | null;
-  /** ETH sitting in that account, withdrawable by the NFT holder. */
-  tbaBalance: bigint;
+  /** Everything withdrawable from that account, ETH and elected tokens alike. */
+  assets: BossAsset[];
 };
 
 /** The connected wallet's Bosses, what each is owed, and what it already holds. */
@@ -182,10 +195,52 @@ function useMyBosses() {
       ]);
 
       // Delivered rewards land in the Boss's token-bound account, not the
-      // owner's wallet — so the balance a holder can actually withdraw lives
-      // there and has to be read per account.
-      const balances = await Promise.all(
+      // owner's wallet, so what a holder can withdraw has to be read per account.
+      // A Boss with an election receives stock rather than ETH, so check both.
+      const elections = (await readMany(
+        client,
+        owned.map((id) => ({
+          address: c.houseBook.address,
+          abi: c.houseBook.abi,
+          functionName: 'electionOf',
+          args: [id] as const,
+        })),
+      )) as (readonly [readonly Address[], readonly number[]] | null)[];
+
+      const ethBalances = await Promise.all(
         tbas.map((t) => (t ? client!.getBalance({ address: t }) : Promise.resolve(0n))),
+      );
+
+      const assetsPerBoss = await Promise.all(
+        owned.map(async (_id, i): Promise<BossAsset[]> => {
+          const tba = tbas[i];
+          const out: BossAsset[] = [];
+          if (ethBalances[i] > 0n) out.push({ token: null, symbol: 'ETH', balance: ethBalances[i] });
+          const elected = elections[i]?.[0] ?? [];
+          if (!tba || elected.length === 0) return out;
+
+          const [bals, syms] = await Promise.all([
+            readMany(
+              client,
+              elected.map((t) => ({
+                address: t,
+                abi: ABIS.erc20,
+                functionName: 'balanceOf',
+                args: [tba] as const,
+              })),
+            ) as Promise<(bigint | null)[]>,
+            readMany(
+              client,
+              elected.map((t) => ({ address: t, abi: ABIS.erc20, functionName: 'symbol' })),
+            ) as Promise<(string | null)[]>,
+          ]);
+
+          elected.forEach((t, j) => {
+            const bal = bals[j] ?? 0n;
+            if (bal > 0n) out.push({ token: t, symbol: syms[j] ?? shortAddr(t), balance: bal });
+          });
+          return out;
+        }),
       );
 
       return owned.map((id, i) => ({
@@ -193,7 +248,7 @@ function useMyBosses() {
         pending: pendings[i] ?? 0n,
         activated: activations[i] ?? false,
         tba: tbas[i] ?? null,
-        tbaBalance: balances[i] ?? 0n,
+        assets: assetsPerBoss[i],
       }));
     },
   });
@@ -234,7 +289,16 @@ export default function RewardsPage() {
   });
 
   const myPending = (mine.data ?? []).reduce((a, b) => a + b.pending, 0n);
-  const myWithdrawable = (mine.data ?? []).reduce((a, b) => a + b.tbaBalance, 0n);
+  const myWithdrawable = (mine.data ?? []).reduce(
+    (a, b) => a + b.assets.reduce((x, y) => x + (y.token === null ? y.balance : 0n), 0n),
+    0n,
+  );
+  // Bosses with an election hold stock rather than ETH, so an ETH-only total
+  // would read zero for them and look like they had earned nothing.
+  const myTokenAssets = (mine.data ?? []).reduce(
+    (a, b) => a + b.assets.filter((x) => x.token !== null).length,
+    0,
+  );
   const myActive = (mine.data ?? []).filter((b) => b.activated);
 
   return (
@@ -330,7 +394,11 @@ export default function RewardsPage() {
               <Stat
                 label="Withdrawable now"
                 value={`Ξ${fmtUnits(myWithdrawable)}`}
-                sub="already in your Bosses"
+                sub={
+                  myTokenAssets > 0
+                    ? `plus ${myTokenAssets} stock holding${myTokenAssets === 1 ? '' : 's'}`
+                    : 'already in your Bosses'
+                }
               />
               <Stat label="Owed in the book" value={`Ξ${fmtUnits(myPending)}`} sub="deliver to claim" />
               <Stat label="Bosses held" value={String((mine.data ?? []).length)} />
@@ -378,31 +446,60 @@ export default function RewardsPage() {
                       Deliver
                     </button>
 
-                    <div className="text-right">
-                      <p className="eyebrow">in your boss</p>
-                      <p className="num text-sm text-lime">Ξ{fmtUnits(b.tbaBalance)}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {b.assets.length === 0 ? (
+                        <p className="text-xs text-dim">nothing to withdraw</p>
+                      ) : (
+                        b.assets.map((a) => (
+                          <div key={a.token ?? 'eth'} className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className="eyebrow">in your boss</p>
+                              <p className="num text-sm text-lime">
+                                {a.token === null ? 'Ξ' : ''}
+                                {fmtUnits(a.balance)} {a.token === null ? '' : a.symbol}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!b.tba || !address) return;
+                                // The Boss's account is a smart account the NFT
+                                // holder controls. operation 0 = CALL. For ETH the
+                                // value is forwarded with empty calldata; for a
+                                // token the account calls transfer on it instead.
+                                const args =
+                                  a.token === null
+                                    ? ([address, a.balance, '0x', 0] as const)
+                                    : ([
+                                        a.token,
+                                        0n,
+                                        encodeFunctionData({
+                                          abi: ABIS.erc20,
+                                          functionName: 'transfer',
+                                          args: [address, a.balance],
+                                        }),
+                                        0,
+                                      ] as const);
+                                send(
+                                  {
+                                    address: b.tba,
+                                    abi: ABIS.pitBossAccount,
+                                    functionName: 'execute',
+                                    args,
+                                  },
+                                  {
+                                    title: `Withdraw ${a.symbol} from Boss #${b.tokenId.toString()}`,
+                                  },
+                                );
+                              }}
+                              disabled={busy || !b.tba}
+                              className="pill-lime disabled:opacity-50"
+                            >
+                              Withdraw {a.token === null ? 'ETH' : a.symbol}
+                            </button>
+                          </div>
+                        ))
+                      )}
                     </div>
-                    <button
-                      onClick={() => {
-                        if (!b.tba || !address) return;
-                        // The Boss's account is a smart account the NFT holder
-                        // controls: execute() forwards its ETH to the caller.
-                        // operation 0 = CALL; empty calldata = a plain transfer.
-                        send(
-                          {
-                            address: b.tba,
-                            abi: ABIS.pitBossAccount,
-                            functionName: 'execute',
-                            args: [address, b.tbaBalance, '0x', 0],
-                          },
-                          { title: `Withdraw from Boss #${b.tokenId.toString()}` },
-                        );
-                      }}
-                      disabled={busy || b.tbaBalance === 0n || !b.tba}
-                      className="pill-lime disabled:opacity-50"
-                    >
-                      Withdraw
-                    </button>
                   </div>
                 </div>
               ))}
