@@ -21,6 +21,7 @@ import activationManagerJson from '@/lib/abi/ActivationManager.json';
 import floorPositionJson from '@/lib/abi/FloorPosition.json';
 import houseBookJson from '@/lib/abi/HouseBook.json';
 import pitTreasuryJson from '@/lib/abi/PitTreasury.json';
+import pitBossAccountJson from '@/lib/abi/PitBossAccount.json';
 import bearerCertificateJson from '@/lib/abi/BearerCertificate.json';
 import certificateCounterJson from '@/lib/abi/CertificateCounter.json';
 import degenRollJson from '@/lib/abi/DegenRoll.json';
@@ -47,6 +48,9 @@ export const ABIS = {
   floorPosition: floorPositionJson as unknown as Abi,
   houseBook: houseBookJson as unknown as Abi,
   pitTreasury: pitTreasuryJson as unknown as Abi,
+  // Per-Boss token-bound account. Not a deployment — each Boss has its own
+  // address, resolved via PitBoss.accountOf(tokenId).
+  pitBossAccount: pitBossAccountJson as unknown as Abi,
   bearerCertificate: bearerCertificateJson as unknown as Abi,
   certificateCounter: certificateCounterJson as unknown as Abi,
   degenRoll: degenRollJson as unknown as Abi,
