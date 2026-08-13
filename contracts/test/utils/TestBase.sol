@@ -112,7 +112,8 @@ abstract contract TestBase is Test {
                 boss: address(boss),
                 activation: address(activation),
                 floor: address(floor),
-                protocolReserve: protocolReserve
+                protocolReserve: protocolReserve,
+                pit: address(pit)
             })
         );
         machine = DegenRoll(payable(factory.createMachine(address(stock), creator)));
