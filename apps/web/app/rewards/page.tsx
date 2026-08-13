@@ -366,15 +366,15 @@ export default function RewardsPage() {
               <p className="data text-sm text-lime">$PITBOSS revenue reaches Bosses as ETH.</p>
               <p className="mt-2 text-xs text-mute">
                 Half of every 888,888 activation fee is burned outright. The other half is routed
-                to the treasury, which sells it and pays the proceeds into the House Book — where
-                it is distributed to activated Bosses through the same crank and deliver path as
-                every other fee. PIT wagers on the Pit tables are separate: they burn the house
-                edge and convert the rest to bankroll stock, growing the prize pool rather than
-                paying Bosses.
+                to the treasury, and is sold for ETH and paid into the House Book — where it
+                reaches activated Bosses through the same crank and deliver path as every other
+                fee.
               </p>
               <p className="mt-2 text-xs text-dim">
-                Treasury {shortAddr(treasuryAddr)} · anyone can call convert() to push the
-                accumulated balance through.
+                Treasury {shortAddr(treasuryAddr)}. Conversion is manual for now: $PITBOSS
+                liquidity sits in a Uniswap V4 pool, and the protocol&apos;s router only
+                routes V3, so the automatic path is not wired yet. The balance is safe and
+                withdrawable meanwhile.
               </p>
             </div>
           </>
