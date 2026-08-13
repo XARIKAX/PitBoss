@@ -28,6 +28,7 @@ export type DeploymentMap = {
   certificateCounter: Address;
   bearerCertificate: Address;
   houseBook: Address;
+  pitTreasury: Address;
   floorPosition: Address;
   activationManager: Address;
   pitBoss: Address;
@@ -52,6 +53,7 @@ const EMPTY: DeploymentMap = {
   certificateCounter: PLACEHOLDER,
   bearerCertificate: PLACEHOLDER,
   houseBook: PLACEHOLDER,
+  pitTreasury: PLACEHOLDER,
   floorPosition: PLACEHOLDER,
   activationManager: PLACEHOLDER,
   pitBoss: PLACEHOLDER,
@@ -74,6 +76,7 @@ const KEY_MAP: Record<string, keyof DeploymentMap> = {
   PIT: 'pit',
   PitBoss: 'pitBoss',
   HouseBook: 'houseBook',
+  PitTreasury: 'pitTreasury',
   FlatAMMVault: 'flatAmmVault',
   ActivationManager: 'activationManager',
   FloorPosition: 'floorPosition',

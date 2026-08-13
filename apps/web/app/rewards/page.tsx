@@ -192,13 +192,14 @@ export default function RewardsPage() {
       ? Math.min(100, Number((bar.data * 100n) / threshold.data))
       : 0;
 
-  // Treasury is optional wiring: absent until deployed, so every read guards on it.
-  const treasuryAddr = (c as unknown as { pitTreasury?: { address: Address } }).pitTreasury?.address;
-  const treasuryLive = Boolean(treasuryAddr && isDeployed(treasuryAddr));
+  // PLACEHOLDER until the treasury is deployed and added to deployments.<chain>.json,
+  // so this section reports the real routing rather than asserting a state.
+  const treasuryAddr = c.pitTreasury.address;
+  const treasuryLive = isDeployed(treasuryAddr);
   const treasuryPit = useRead<bigint>({
     contract: { address: c.pit.address, abi: c.pit.abi },
     functionName: 'balanceOf',
-    args: treasuryLive ? [treasuryAddr as Address] : undefined,
+    args: treasuryLive ? [treasuryAddr] : undefined,
     enabled: treasuryLive,
     refetchInterval: 30_000,
   });

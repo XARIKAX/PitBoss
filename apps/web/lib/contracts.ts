@@ -20,6 +20,7 @@ import flatAmmVaultJson from '@/lib/abi/FlatAMMVault.json';
 import activationManagerJson from '@/lib/abi/ActivationManager.json';
 import floorPositionJson from '@/lib/abi/FloorPosition.json';
 import houseBookJson from '@/lib/abi/HouseBook.json';
+import pitTreasuryJson from '@/lib/abi/PitTreasury.json';
 import bearerCertificateJson from '@/lib/abi/BearerCertificate.json';
 import certificateCounterJson from '@/lib/abi/CertificateCounter.json';
 import degenRollJson from '@/lib/abi/DegenRoll.json';
@@ -45,6 +46,7 @@ export const ABIS = {
   activationManager: activationManagerJson as unknown as Abi,
   floorPosition: floorPositionJson as unknown as Abi,
   houseBook: houseBookJson as unknown as Abi,
+  pitTreasury: pitTreasuryJson as unknown as Abi,
   bearerCertificate: bearerCertificateJson as unknown as Abi,
   certificateCounter: certificateCounterJson as unknown as Abi,
   degenRoll: degenRollJson as unknown as Abi,
@@ -74,6 +76,7 @@ export type Contracts = {
   activationManager: ContractRef;
   floorPosition: ContractRef;
   houseBook: ContractRef;
+  pitTreasury: ContractRef;
   bearerCertificate: ContractRef;
   certificateCounter: ContractRef;
   degenRollFactory: ContractRef;
@@ -100,6 +103,9 @@ export function getContracts(chainId: number): Contracts {
     activationManager: { address: d.activationManager, abi: ABIS.activationManager },
     floorPosition: { address: d.floorPosition, abi: ABIS.floorPosition },
     houseBook: { address: d.houseBook, abi: ABIS.houseBook },
+    // Optional wiring: PLACEHOLDER until the treasury is deployed and added to
+    // deployments.<chain>.json. The rewards page keys its PIT section off this.
+    pitTreasury: { address: d.pitTreasury, abi: ABIS.pitTreasury },
     bearerCertificate: { address: d.bearerCertificate, abi: ABIS.bearerCertificate },
     certificateCounter: { address: d.certificateCounter, abi: ABIS.certificateCounter },
     degenRollFactory: { address: d.degenRollFactory, abi: ABIS.degenRollFactory },
