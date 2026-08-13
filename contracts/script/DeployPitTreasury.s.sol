@@ -16,8 +16,15 @@ import {PitTreasury} from "../src/book/PitTreasury.sol";
 ///
 ///         Already-stranded tokens are NOT recoverable. This only stops the leak.
 ///
+///         MUST be deployed from a wallet that is NOT the $PITBOSS deployer, and
+///         owned by one either — this contract sells $PITBOSS, and chart UIs flag
+///         sells attributable to a token's deployer. The script refuses to run
+///         otherwise. Use a second wallet you control, so no external party gains
+///         authority over a protocol contract.
+///
 ///         Run:
 ///           cd contracts
+///           export TREASURY_OWNER=0x...        # NOT the $PITBOSS deployer
 ///           forge script script/DeployPitTreasury.s.sol \
 ///             --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast \
 ///             --verifier blockscout \
@@ -31,13 +38,23 @@ contract DeployPitTreasury is Script {
     address constant ACTIVATION = 0x5807f5Bf9C18aF6D27DdA20b90e2810877672C4b;
     address constant LOCKER     = 0xFA15a03d5e28BD000f3cF78bF1AF50eda8595544;
 
-    /// @notice Treasury owner. Keep this on a wallet you control — the owner can
-    ///         only route and sweep, never claim a Boss's credited ETH.
-    address constant OWNER = 0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659;
+    /// @notice The wallet that deployed $PITBOSS. This contract SELLS $PITBOSS, so
+    ///         neither its deployer nor its owner may be this address: chart UIs
+    ///         (DEX Screener et al) attribute sells from the token deployer — and
+    ///         from contracts clustered to it — as a dev sell, and flag the pair.
+    address constant PIT_DEPLOYER = 0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659;
 
     function run() external returns (address treasury) {
+        // Owner can only route and sweep, never claim a Boss's credited ETH — so a
+        // second wallet you control satisfies both this and the rule that no
+        // external party holds authority over protocol contracts.
+        address owner = vm.envAddress("TREASURY_OWNER");
+        require(owner != address(0), "TREASURY_OWNER not set");
+        require(owner != PIT_DEPLOYER, "TREASURY_OWNER must not be the $PITBOSS deployer");
+
         vm.startBroadcast();
-        PitTreasury t = new PitTreasury(PIT_TOKEN, ROUTER, ORACLE, HOUSE_BOOK, OWNER);
+        require(msg.sender != PIT_DEPLOYER, "broadcast from a wallet other than the $PITBOSS deployer");
+        PitTreasury t = new PitTreasury(PIT_TOKEN, ROUTER, ORACLE, HOUSE_BOOK, owner);
         vm.stopBroadcast();
 
         treasury = address(t);
@@ -54,5 +71,9 @@ contract DeployPitTreasury is Script {
         console2.log("    target:", ROUTER);
         console2.log("");
         console2.log("ETH-only fee sources keep paying the House Book directly and are untouched.");
+        console2.log("");
+        console2.log("Treasury owner:", owner);
+        console2.log("Deployed by:   ", msg.sender);
+        console2.log("Neither is the $PITBOSS deployer, so its sells are not attributable to it.");
     }
 }
