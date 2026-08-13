@@ -47,6 +47,9 @@ contract RedeployWithMinerEntropy is Script {
     // ── Creator wallet (deployer EOA, receives factory ownership) ───────────────
     address constant CREATOR = 0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659;
 
+    // ── $PITBOSS, for PIT-staked bets on the machines and wheels ────────────────
+    address constant PIT_TOKEN = 0xd6f542cAdD79F1ec824883a0fdb90cB8c980A7aD;
+
     // ── Robinhood Chain: block.number == L1 block (~12 s cadence) ───────────────
     uint256 constant BLOCK_TIME_MS = 12_000;
 
@@ -66,7 +69,8 @@ contract RedeployWithMinerEntropy is Script {
             boss:            BOSS,
             activation:      ACTIVATION,
             floor:           FLOOR,
-            protocolReserve: PROTOCOL_RESERVE
+            protocolReserve: PROTOCOL_RESERVE,
+            pit:             PIT_TOKEN
         });
 
         // 2. New factories (fresh machineOf / wheelOf mappings — no collision with old factories)
@@ -83,7 +87,8 @@ contract RedeployWithMinerEntropy is Script {
                 boss:            BOSS,
                 activation:      ACTIVATION,
                 floor:           FLOOR,
-                protocolReserve: PROTOCOL_RESERVE
+                protocolReserve: PROTOCOL_RESERVE,
+                pit:             PIT_TOKEN
             })
         );
         console2.log("RouletteWheelFactory: ", address(rouletteFactory));

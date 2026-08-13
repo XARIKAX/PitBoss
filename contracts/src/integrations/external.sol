@@ -25,6 +25,7 @@ interface IPyth {
 
 interface IWETH9 {
     function deposit() external payable;
+    function withdraw(uint256 amount) external;
     function approve(address spender, uint256 value) external returns (bool);
     function balanceOf(address owner) external view returns (uint256);
 }

@@ -59,10 +59,13 @@ contract RouletteWheel is ReentrancyGuard {
         Roulette.Bet bet;
         uint8 selection;
         Status status;
+        uint256 escrowPit; // $PITBOSS stake when the bet was placed in PIT, else 0
     }
 
     // -------- immutable wiring --------
     IERC20 public immutable stock;
+    /// @notice $PITBOSS. Zero disables PIT betting on this wheel.
+    IERC20 public immutable pit;
     IEntropyConductor public immutable conductor;
     IHouseBook public immutable houseBook;
     IOracle public immutable oracle;
@@ -91,6 +94,14 @@ contract RouletteWheel is ReentrancyGuard {
     uint256 public constant DEAD_SHARES = 1e3;
     address internal constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
+    /// @notice Share of a $PITBOSS wager burned outright, in bps. Set to the wheel's
+    ///         structural edge so a PIT bettor gets the SAME 97.30% return as an ETH
+    ///         bettor — the burn replaces the creator/book/protocol rake rather than
+    ///         coming out of the player's stake. Burning more than the edge would
+    ///         make the bankroll insolvent, because prizes are paid at full notional.
+    ///         [CONFIG]
+    uint256 public constant PIT_BURN_BPS = 200; // 2%
+
     // -------- state --------
     uint256 public nextSpinId = 1;
     mapping(uint256 => Spin) public spins;
@@ -98,6 +109,7 @@ contract RouletteWheel is ReentrancyGuard {
     uint256 public totalBankrollStock; // staked + earned, in stock units
     uint256 public totalReserved; // Σ open-spin reserves (invariant: <= bankroll)
     uint256 public ethFloat; // net stake ETH awaiting restock -> stock
+    uint256 public pitFloat; // settled $PITBOSS awaiting conversion -> ETH -> stock
     uint256 public totalShares;
     mapping(address => uint256) public shares;
 
@@ -124,6 +136,11 @@ contract RouletteWheel is ReentrancyGuard {
     event Staked(address indexed staker, uint256 indexed bossId, uint256 amount, uint256 sharesOut);
     event Unstaked(address indexed staker, uint256 amount, uint256 sharesIn);
     event Restocked(address indexed keeper, uint256 ethIn, uint256 stockOut);
+    event SpinBoughtWithPIT(
+        uint256 indexed spinId, address indexed player, uint256 stakePit, uint256 notional
+    );
+    event PitBurned(uint256 amount);
+    event PitRestocked(address indexed keeper, uint256 pitIn, uint256 ethOut);
 
     constructor(
         address stock_,
@@ -136,9 +153,11 @@ contract RouletteWheel is ReentrancyGuard {
         address activation_,
         address floor_,
         address creator_,
-        address protocolReserve_
+        address protocolReserve_,
+        address pit_
     ) {
         stock = IERC20(stock_);
+        pit = IERC20(pit_);
         conductor = IEntropyConductor(conductor_);
         houseBook = IHouseBook(houseBook_);
         oracle = IOracle(oracle_);
@@ -169,16 +188,50 @@ contract RouletteWheel is ReentrancyGuard {
         uint256 t = msg.value;
         if (t == 0) revert Errors.ZeroAmount();
 
-        uint256 usd = (t * oracle.usdPerEth()) / 1e18; // 1e8-scaled
-        uint64 delay;
-        if (lane == Lane.Instant) {
-            if (usd > INSTANT_MAX_USD) revert Errors.InvalidConfig();
-            delay = INSTANT_DELAY;
-        } else {
-            delay = VAULT_DELAY;
-        }
+        _checkLaneCap(lane, t);
+        spinId = _open(lane, bet, selection, t, 0, _stockFor(t));
+    }
 
-        uint256 notional = _stockFor(t);
+    /// @notice Place the same bet staking $PITBOSS instead of ETH. Identical odds:
+    ///         the wager is priced in stock at the oracle mark and pays from the same
+    ///         bankroll, and only the wheel's structural edge is burned. The player
+    ///         must approve this wheel for `pitAmount` first.
+    /// @dev    $PITBOSS taxes transfers, so everything downstream is denominated in
+    ///         the amount that actually arrives, never the amount requested.
+    function spinWithPIT(Lane lane, Roulette.Bet bet, uint8 selection, uint256 pitAmount)
+        external
+        nonReentrant
+        returns (uint256 spinId)
+    {
+        if (address(pit) == address(0)) revert Errors.NotInitialized();
+        if (!conductor.healthy()) revert Errors.FloorUnhealthy();
+        if (!Roulette.isValidSelection(bet, selection)) revert Errors.InvalidConfig();
+        if (pitAmount == 0) revert Errors.ZeroAmount();
+
+        uint256 before = pit.balanceOf(address(this));
+        pit.safeTransferFrom(msg.sender, address(this), pitAmount);
+        uint256 received = pit.balanceOf(address(this)) - before;
+        if (received == 0) revert Errors.ZeroAmount();
+
+        // Value the wager in ETH terms so the lane cap and the stock notional use
+        // exactly the same maths as an ETH bet.
+        uint256 ethValue = (received * oracle.ethPerToken(address(pit))) / 1e18;
+        if (ethValue == 0) revert Errors.InvalidConfig();
+
+        _checkLaneCap(lane, ethValue);
+        spinId = _open(lane, bet, selection, 0, received, _stockFor(ethValue));
+    }
+
+    /// @dev Reserve, record and commit. Shared by both stake currencies so the
+    ///      reserve invariant can never diverge between them.
+    function _open(
+        Lane lane,
+        Roulette.Bet bet,
+        uint8 selection,
+        uint256 escrowEth_,
+        uint256 escrowPit_,
+        uint256 notional
+    ) internal returns (uint256 spinId) {
         if (notional == 0) revert Errors.InvalidConfig();
         uint256 reserve = (notional * Roulette.potentialMultiplier(bet)) / Roulette.ONE_X;
         if (totalBankrollStock - totalReserved < reserve) revert Errors.ReserveShortfall();
@@ -186,10 +239,10 @@ contract RouletteWheel is ReentrancyGuard {
 
         spinId = nextSpinId++;
         bytes32 id = keccak256(abi.encode(address(this), spinId));
-        uint64 readyAt = uint64(block.timestamp) + delay;
+        uint64 readyAt = uint64(block.timestamp) + delayFor(lane);
         spins[spinId] = Spin({
             player: msg.sender,
-            escrowEth: t,
+            escrowEth: escrowEth_,
             notional: notional,
             reserved: reserve,
             boughtAt: uint64(block.timestamp),
@@ -197,10 +250,24 @@ contract RouletteWheel is ReentrancyGuard {
             entropyId: id,
             bet: bet,
             selection: selection,
-            status: Status.Open
+            status: Status.Open,
+            escrowPit: escrowPit_
         });
         conductor.commit(id, readyAt);
-        emit SpinBought(spinId, msg.sender, lane, bet, selection, t, notional);
+        emit SpinBought(spinId, msg.sender, lane, bet, selection, escrowEth_, notional);
+        if (escrowPit_ > 0) emit SpinBoughtWithPIT(spinId, msg.sender, escrowPit_, notional);
+    }
+
+    /// @dev The Instant lane is capped in dollars, so both stake currencies are
+    ///      valued in ETH first and measured against the same ceiling.
+    function _checkLaneCap(Lane lane, uint256 ethValue) internal view {
+        if (lane != Lane.Instant) return;
+        uint256 usd = (ethValue * oracle.usdPerEth()) / 1e18; // 1e8-scaled
+        if (usd > INSTANT_MAX_USD) revert Errors.InvalidConfig();
+    }
+
+    function delayFor(Lane lane) public pure returns (uint64) {
+        return lane == Lane.Instant ? INSTANT_DELAY : VAULT_DELAY;
     }
 
     /// @notice Settle a fulfilled spin, paying any prize as stock to the player.
@@ -227,7 +294,11 @@ contract RouletteWheel is ReentrancyGuard {
         totalReserved -= s.reserved; // release worst-case hold
 
         // Split rake from the stake; net feeds the restock float.
-        _splitRake(s.escrowEth);
+        if (s.escrowPit > 0) {
+            _splitPit(s.escrowPit);
+        } else {
+            _splitRake(s.escrowEth);
+        }
 
         // Pay prize from bankroll (guaranteed solvent by the reserve invariant).
         if (prize > 0) {
@@ -252,6 +323,14 @@ contract RouletteWheel is ReentrancyGuard {
 
         s.status = Status.Refunded;
         totalReserved -= s.reserved;
+        // Refund in whatever was staked. Nothing has been burned or converted yet —
+        // that only happens at settle — so the escrow is still intact either way.
+        if (s.escrowPit > 0) {
+            uint256 pitAmount = s.escrowPit;
+            pit.safeTransfer(s.player, pitAmount);
+            emit SpinRefunded(spinId, s.player, pitAmount);
+            return;
+        }
         uint256 amount = s.escrowEth;
         (bool ok,) = s.player.call{value: amount}("");
         if (!ok) revert Errors.InsufficientPayment();
@@ -383,6 +462,41 @@ contract RouletteWheel is ReentrancyGuard {
             (bool ok,) = protocolReserve.call{value: toProtocol}("");
             if (!ok) revert Errors.InsufficientPayment();
         }
+    }
+
+    /// @dev The $PITBOSS mirror of `_splitRake`. The whole 2% edge is burned rather
+    ///      than split to creator/book/protocol, so a PIT wager pays the player the
+    ///      same 97.30% as an ETH wager while permanently removing supply. The
+    ///      remaining 98% becomes stock via `restockPit` -> `restock`, which is what
+    ///      keeps the bankroll solvent against prizes paid at full notional.
+    function _splitPit(uint256 stakePit) internal {
+        uint256 burn = (stakePit * PIT_BURN_BPS) / 10_000;
+        uint256 net = stakePit - burn;
+        pitFloat += net;
+        if (burn > 0) {
+            // $PITBOSS exposes no burn(); the dead address is the sink used
+            // everywhere else in the protocol (see ActivationManager).
+            pit.safeTransfer(DEAD, burn);
+            emit PitBurned(burn);
+        }
+    }
+
+    /// @notice Convert settled $PITBOSS into ETH, which `restock` then turns into
+    ///         bankroll stock. Permissionless keeper action, same as `restock`.
+    /// @dev    Split in two so the PIT->ETH leg and the ETH->stock leg each carry
+    ///         their own slippage bound instead of compounding inside one call.
+    function restockPit() external nonReentrant returns (uint256 ethOut) {
+        uint256 pitIn = pitFloat;
+        if (pitIn == 0) revert Errors.ZeroAmount();
+        uint256 quote = router.quoteTokensForETH(address(pit), pitIn);
+        uint256 minOut = (quote * (10_000 - RESTOCK_SLIPPAGE_BPS)) / 10_000;
+        pitFloat = 0;
+
+        // The wheel's own `receive()` credits ethFloat, so route the proceeds here
+        // and let the existing ETH path do the rest.
+        pit.forceApprove(address(router), pitIn);
+        ethOut = router.swapExactTokensForETH(address(pit), pitIn, minOut, address(this));
+        emit PitRestocked(msg.sender, pitIn, ethOut);
     }
 
     receive() external payable {

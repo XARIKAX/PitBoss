@@ -25,6 +25,8 @@ contract RouletteWheelFactory is Ownable {
         address activation;
         address floor;
         address protocolReserve;
+        /// @notice $PITBOSS. Zero leaves PIT betting disabled on new wheels.
+        address pit;
     }
 
     Wiring public wiring;
@@ -63,7 +65,8 @@ contract RouletteWheelFactory is Ownable {
                 w.activation,
                 w.floor,
                 creator,
-                w.protocolReserve
+                w.protocolReserve,
+                w.pit
             )
         );
         wheelOf[stock] = wheel;

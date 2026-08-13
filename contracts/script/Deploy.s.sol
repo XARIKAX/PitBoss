@@ -176,7 +176,8 @@ contract Deploy is Script {
                 boss: a.boss,
                 activation: a.activation,
                 floor: a.floor,
-                protocolReserve: protocolReserve
+                protocolReserve: protocolReserve,
+                pit: a.pit
             })
         );
         a.rollFactory = address(factory);
@@ -197,7 +198,8 @@ contract Deploy is Script {
                 boss: a.boss,
                 activation: a.activation,
                 floor: a.floor,
-                protocolReserve: protocolReserve
+                protocolReserve: protocolReserve,
+                pit: a.pit
             })
         );
         a.rouletteFactory = address(rFactory);
