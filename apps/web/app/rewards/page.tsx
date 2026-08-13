@@ -192,6 +192,17 @@ export default function RewardsPage() {
       ? Math.min(100, Number((bar.data * 100n) / threshold.data))
       : 0;
 
+  // Treasury is optional wiring: absent until deployed, so every read guards on it.
+  const treasuryAddr = (c as unknown as { pitTreasury?: { address: Address } }).pitTreasury?.address;
+  const treasuryLive = Boolean(treasuryAddr && isDeployed(treasuryAddr));
+  const treasuryPit = useRead<bigint>({
+    contract: { address: c.pit.address, abi: c.pit.abi },
+    functionName: 'balanceOf',
+    args: treasuryLive ? [treasuryAddr as Address] : undefined,
+    enabled: treasuryLive,
+    refetchInterval: 30_000,
+  });
+
   const myPending = (mine.data ?? []).reduce((a, b) => a + b.pending, 0n);
   const myActive = (mine.data ?? []).filter((b) => b.activated);
 
@@ -336,18 +347,50 @@ export default function RewardsPage() {
       </Section>
 
       <Section label="$PITBOSS" title="Token" emphasis="rewards.">
-        {/* Stating this plainly is the whole point of a proof page. Bosses earn no
-            PIT today, and the activation share is stranded rather than parked. */}
-        <div className="card border-amber-400/30">
-          <p className="data text-sm text-amber-200">No $PITBOSS is distributed to Bosses today.</p>
-          <p className="mt-2 text-xs text-mute">
-            Half of every 888,888 $PITBOSS activation fee is burned. The other half is sent to the
-            House Book, which has no function that can move an ERC-20 — so it is stranded there
-            rather than being distributed. Fee revenue for Bosses is ETH only, from the sources
-            above. PIT wagers on the Pit tables burn the house edge outright and convert the rest
-            to bankroll stock, so they grow the prize pool rather than paying Bosses directly.
-          </p>
-        </div>
+        {/* Read the live routing rather than asserting a state. Until the treasury
+            is deployed and ActivationManager is repointed at it, activation revenue
+            still lands somewhere it cannot leave — so say which is true right now. */}
+        {treasuryLive ? (
+          <>
+            <div className="mb-3 grid gap-3 sm:grid-cols-3">
+              <Stat
+                label="Awaiting conversion"
+                value={treasuryPit.data != null ? fmtUnits(treasuryPit.data) : '…'}
+                sub="$PITBOSS held by the treasury"
+              />
+              <Stat label="Burned per activation" value="444,444" sub="half of every fee, forever" />
+              <Stat label="To Bosses per activation" value="444,444" sub="converted to ETH rewards" />
+            </div>
+            <div className="card">
+              <p className="data text-sm text-lime">$PITBOSS revenue reaches Bosses as ETH.</p>
+              <p className="mt-2 text-xs text-mute">
+                Half of every 888,888 activation fee is burned outright. The other half is routed
+                to the treasury, which sells it and pays the proceeds into the House Book — where
+                it is distributed to activated Bosses through the same crank and deliver path as
+                every other fee. PIT wagers on the Pit tables are separate: they burn the house
+                edge and convert the rest to bankroll stock, growing the prize pool rather than
+                paying Bosses.
+              </p>
+              <p className="mt-2 text-xs text-dim">
+                Treasury {shortAddr(treasuryAddr)} · anyone can call convert() to push the
+                accumulated balance through.
+              </p>
+            </div>
+          </>
+        ) : (
+          <div className="card border-amber-400/30">
+            <p className="data text-sm text-amber-200">
+              $PITBOSS revenue is not reaching Bosses yet.
+            </p>
+            <p className="mt-2 text-xs text-mute">
+              Half of every 888,888 activation fee is burned. The other half is currently sent to
+              the House Book, which has no function that can move an ERC-20, so it accumulates
+              there untouched. The treasury that converts it into ETH rewards is built but not yet
+              deployed; once it is, this section switches over automatically and Bosses start
+              earning on activations. Fee revenue today is ETH only, from the sources above.
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section label="History" title="Recent" emphasis="payouts.">
