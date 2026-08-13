@@ -97,7 +97,18 @@ function useDelivered() {
   });
 }
 
-/** The connected wallet's Bosses and what each is owed right now. */
+type MyBoss = {
+  tokenId: bigint;
+  /** Credited in the House Book, not yet delivered. */
+  pending: bigint;
+  activated: boolean;
+  /** The Boss's token-bound account — where delivered rewards actually land. */
+  tba: Address | null;
+  /** ETH sitting in that account, withdrawable by the NFT holder. */
+  tbaBalance: bigint;
+};
+
+/** The connected wallet's Bosses, what each is owed, and what it already holds. */
 function useMyBosses() {
   const { address } = useAccount();
   const { c, chainId } = useContracts();
@@ -106,7 +117,7 @@ function useMyBosses() {
     queryKey: ['rewardsMyBosses', chainId, address ?? '0x0'],
     enabled: Boolean(client && address && isDeployed(c.pitBoss.address)),
     refetchInterval: 30_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<MyBoss[]> => {
       // PitBoss is not ERC721Enumerable, so follow the same route the certificates
       // and locker pages use: every token that ever arrived here, filtered by who
       // holds it now (transfers out are dropped by the ownerOf check).
@@ -124,7 +135,7 @@ function useMyBosses() {
         seen.add(id.toString());
         candidates.push(id);
       }
-      if (candidates.length === 0) return [] as { tokenId: bigint; pending: bigint; activated: boolean }[];
+      if (candidates.length === 0) return [] as MyBoss[];
 
       const owners = (await readMany(
         client,
@@ -138,9 +149,9 @@ function useMyBosses() {
       const owned = candidates.filter(
         (_, i) => owners[i]?.toLowerCase() === address!.toLowerCase(),
       );
-      if (owned.length === 0) return [] as { tokenId: bigint; pending: bigint; activated: boolean }[];
+      if (owned.length === 0) return [] as MyBoss[];
 
-      const [pendings, activations] = await Promise.all([
+      const [pendings, activations, tbas] = await Promise.all([
         readMany(
           client,
           owned.map((id) => ({
@@ -159,12 +170,30 @@ function useMyBosses() {
             args: [id] as const,
           })),
         ) as Promise<(boolean | null)[]>,
+        readMany(
+          client,
+          owned.map((id) => ({
+            address: c.pitBoss.address,
+            abi: c.pitBoss.abi,
+            functionName: 'accountOf',
+            args: [id] as const,
+          })),
+        ) as Promise<(Address | null)[]>,
       ]);
+
+      // Delivered rewards land in the Boss's token-bound account, not the
+      // owner's wallet — so the balance a holder can actually withdraw lives
+      // there and has to be read per account.
+      const balances = await Promise.all(
+        tbas.map((t) => (t ? client!.getBalance({ address: t }) : Promise.resolve(0n))),
+      );
 
       return owned.map((id, i) => ({
         tokenId: id,
         pending: pendings[i] ?? 0n,
         activated: activations[i] ?? false,
+        tba: tbas[i] ?? null,
+        tbaBalance: balances[i] ?? 0n,
       }));
     },
   });
@@ -172,7 +201,7 @@ function useMyBosses() {
 
 export default function RewardsPage() {
   const { c, chainId } = useContracts();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { send, busy } = useTx();
 
   const accruals = useAccruals();
@@ -205,6 +234,7 @@ export default function RewardsPage() {
   });
 
   const myPending = (mine.data ?? []).reduce((a, b) => a + b.pending, 0n);
+  const myWithdrawable = (mine.data ?? []).reduce((a, b) => a + b.tbaBalance, 0n);
   const myActive = (mine.data ?? []).filter((b) => b.activated);
 
   return (
@@ -297,7 +327,12 @@ export default function RewardsPage() {
         ) : (
           <>
             <div className="mb-3 grid gap-3 sm:grid-cols-3">
-              <Stat label="Your pending" value={`Ξ${fmtUnits(myPending)}`} sub="claimable now" />
+              <Stat
+                label="Withdrawable now"
+                value={`Ξ${fmtUnits(myWithdrawable)}`}
+                sub="already in your Bosses"
+              />
+              <Stat label="Owed in the book" value={`Ξ${fmtUnits(myPending)}`} sub="deliver to claim" />
               <Stat label="Bosses held" value={String((mine.data ?? []).length)} />
               <Stat label="Activated" value={`${myActive.length}`} sub="only these earn" />
             </div>
@@ -320,8 +355,11 @@ export default function RewardsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <p className="num text-sm">Ξ{fmtUnits(b.pending)}</p>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="text-right">
+                      <p className="eyebrow">in the book</p>
+                      <p className="num text-sm">Ξ{fmtUnits(b.pending)}</p>
+                    </div>
                     <button
                       onClick={() =>
                         send(
@@ -335,9 +373,35 @@ export default function RewardsPage() {
                         )
                       }
                       disabled={busy || b.pending === 0n}
-                      className="pill-lime disabled:opacity-50"
+                      className="pill-ghost disabled:opacity-50"
                     >
                       Deliver
+                    </button>
+
+                    <div className="text-right">
+                      <p className="eyebrow">in your boss</p>
+                      <p className="num text-sm text-lime">Ξ{fmtUnits(b.tbaBalance)}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!b.tba || !address) return;
+                        // The Boss's account is a smart account the NFT holder
+                        // controls: execute() forwards its ETH to the caller.
+                        // operation 0 = CALL; empty calldata = a plain transfer.
+                        send(
+                          {
+                            address: b.tba,
+                            abi: ABIS.pitBossAccount,
+                            functionName: 'execute',
+                            args: [address, b.tbaBalance, '0x', 0],
+                          },
+                          { title: `Withdraw from Boss #${b.tokenId.toString()}` },
+                        );
+                      }}
+                      disabled={busy || b.tbaBalance === 0n || !b.tba}
+                      className="pill-lime disabled:opacity-50"
+                    >
+                      Withdraw
                     </button>
                   </div>
                 </div>
