@@ -151,6 +151,10 @@ contract PitStakeTest is TestBase {
     function test_Refund_ReturnsFullPitStake() public {
         uint256 stake = 100 ether;
         uint256 before = pit.balanceOf(player);
+        // setUp activates a Boss, and activation burns half its 888,888 fee — so the
+        // dead address is already non-zero here. Measure the delta, not the total.
+        uint256 deadBefore = pit.balanceOf(DEAD);
+
         uint256 sid = _spinPit(stake, Roulette.Bet.Red, 0);
         assertEq(pit.balanceOf(player), before - stake, "stake escrowed");
 
@@ -158,7 +162,7 @@ contract PitStakeTest is TestBase {
         wheel.refund(sid);
 
         assertEq(pit.balanceOf(player), before, "full stake refunded");
-        assertEq(pit.balanceOf(DEAD), 0, "refund burns nothing");
+        assertEq(pit.balanceOf(DEAD), deadBefore, "refund burns nothing");
         assertEq(wheel.totalReserved(), 0, "reserve released on refund");
     }
 
