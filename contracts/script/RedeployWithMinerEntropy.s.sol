@@ -44,8 +44,12 @@ contract RedeployWithMinerEntropy is Script {
     address constant TSLA = 0x322F0929c4625eD5bAd873c95208D54E1c003b2d;
     address constant AAPL = 0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9;
 
-    // ── Creator wallet (deployer EOA, receives factory ownership) ───────────────
-    address constant CREATOR = 0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659;
+    /// @notice The wallet that deployed $PITBOSS. The machines and wheels created
+    ///         here SELL $PITBOSS via restockPit(), so neither the deployer of this
+    ///         script nor the creator may be this address: chart UIs attribute sells
+    ///         from a token's deployer — and from contracts clustered to it — as a
+    ///         dev sell and flag the pair. Use a second wallet you control.
+    address constant PIT_DEPLOYER = 0x2fA1E9372c128e2A756f5BdD096d398eAEa0B659;
 
     // ── $PITBOSS, for PIT-staked bets on the machines and wheels ────────────────
     address constant PIT_TOKEN = 0xd6f542cAdD79F1ec824883a0fdb90cB8c980A7aD;
@@ -54,7 +58,14 @@ contract RedeployWithMinerEntropy is Script {
     uint256 constant BLOCK_TIME_MS = 12_000;
 
     function run() external {
+        // Creator receives the per-game creator rake. Must not be the $PITBOSS
+        // deployer — see PIT_DEPLOYER above.
+        address creator = vm.envAddress("GAME_CREATOR");
+        require(creator != address(0), "GAME_CREATOR not set");
+        require(creator != PIT_DEPLOYER, "GAME_CREATOR must not be the $PITBOSS deployer");
+
         vm.startBroadcast();
+        require(msg.sender != PIT_DEPLOYER, "broadcast from a wallet other than the $PITBOSS deployer");
 
         // 1. Self-sufficient entropy — blockhash commit-reveal, no third party needed
         MinerEntropyConductor conductor = new MinerEntropyConductor(BLOCK_TIME_MS);
@@ -97,19 +108,33 @@ contract RedeployWithMinerEntropy is Script {
         address[3] memory stocks = [NVDA, TSLA, AAPL];
         string[3] memory syms    = ["NVDA", "TSLA", "AAPL"];
 
+        // NOTE: setIssuer/setBumper are deliberately NOT called here. They are
+        // onlyOwner on BearerCertificate and FloorPosition, which are owned by the
+        // $PITBOSS deployer — the one wallet this script must not broadcast from.
+        // They are printed below for that wallet to run as a second step.
+        address[6] memory created;
         for (uint256 i = 0; i < 3; i++) {
-            address machine = rollFactory.createMachine(stocks[i], CREATOR);
-            BearerCertificate(CERTIFICATE).setIssuer(machine, true);
-            FloorPosition(FLOOR).setBumper(machine, true);
+            address machine = rollFactory.createMachine(stocks[i], creator);
             console2.log(string.concat(syms[i], " machine:"), machine);
+            created[i * 2] = machine;
 
-            address wheel = rouletteFactory.createWheel(stocks[i], CREATOR);
-            BearerCertificate(CERTIFICATE).setIssuer(wheel, true);
-            FloorPosition(FLOOR).setBumper(wheel, true);
+            address wheel = rouletteFactory.createWheel(stocks[i], creator);
             console2.log(string.concat(syms[i], " wheel:  "), wheel);
+            created[i * 2 + 1] = wheel;
         }
 
         vm.stopBroadcast();
+
+        console2.log("");
+        console2.log("NEXT - run these from the protocol owner wallet (the $PITBOSS");
+        console2.log("deployer), which owns BearerCertificate and FloorPosition.");
+        console2.log("Until they are run, wins cannot be sealed into certificates and");
+        console2.log("bankroll staking will not award floor points.");
+        console2.log("  certificate:", CERTIFICATE);
+        console2.log("  floor:      ", FLOOR);
+        for (uint256 i = 0; i < 6; i++) {
+            console2.log("    setIssuer/setBumper ->", created[i]);
+        }
 
         // 4. Patch only the three changed keys — everything else in the JSON is untouched
         string memory path = "deployments/deployments.4663.json";
