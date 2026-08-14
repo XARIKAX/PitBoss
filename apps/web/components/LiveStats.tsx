@@ -53,7 +53,8 @@ export function useFloorStats() {
   const flags = useQuery({
     queryKey: ['activationFlags', chainId, mintedNum],
     enabled: Boolean(client && mintedNum && isDeployed(c.activationManager.address)),
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
     queryFn: async (): Promise<boolean[]> => {
       const ids = Array.from({ length: mintedNum ?? 0 }, (_, i) => BigInt(i + 1));
       const res = await readMany(
@@ -65,14 +66,24 @@ export function useFloorStats() {
           args: [id] as const,
         })),
       );
-      return res.map((r) => r === true);
+      // A dropped read returns null, and null must never masquerade as
+      // "dormant" — that silently undercounts the census. Retry misses
+      // individually before accepting an answer.
+      return Promise.all(
+        res.map(async (r, i) => {
+          if (r != null) return r === true;
+          const retry = await safeRead(client, c.activationManager, 'isActivated', [ids[i]]);
+          return retry === true;
+        }),
+      );
     },
   });
 
   const burned = useQuery({
     queryKey: ['burned', chainId],
     enabled: Boolean(client && isDeployed(c.pit.address)),
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
     queryFn: async (): Promise<bigint | null> =>
       (await safeRead(client, c.pit, 'balanceOf', [DEAD])) as bigint | null,
   });
@@ -104,6 +115,13 @@ export function useFloorStats() {
     /** Everything permanently out of circulation: dead address + stranded book. */
     removedTokens:
       burnedTokens == null ? null : burnedTokens + (strandedTokens ?? 0),
+    /**
+     * Activation events all time, derived from the dead balance — every
+     * activation burns exactly 444,444, so the division is exact. Runs ahead
+     * of the live census whenever a sold Boss hasn't been reactivated yet.
+     */
+    activationsAllTime:
+      burnedTokens == null ? null : Math.round(burnedTokens / BURN_PER_ACTIVATION),
     bookEth: bar.data != null ? Number(formatEther(bar.data)) : null,
     loading: flags.isLoading || burned.isLoading,
   };
@@ -327,6 +345,15 @@ export function TrackerBoard() {
                     'Reading every token from the chain…'
                   )}
                 </p>
+                {s.activationsAllTime != null ? (
+                  <p className="mt-2 text-[11.5px] text-dim">
+                    <span className="font-mono font-semibold text-mute">
+                      {s.activationsAllTime}
+                    </span>{' '}
+                    activations all time. A sold Boss leaves the count until its new owner
+                    switches it back on.
+                  </p>
+                ) : null}
               </>
             }
           />
