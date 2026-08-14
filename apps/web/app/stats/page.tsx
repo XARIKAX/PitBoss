@@ -3,6 +3,7 @@
 import { PageHeader, Section } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { TrackerBoard } from '@/components/LiveStats';
+import { TopEarners } from '@/components/TopEarners';
 import { TokenAddress } from '@/components/TokenAddress';
 
 /**
@@ -22,8 +23,14 @@ export default function StatsPage() {
 
       <Section label="Live" title="On" emphasis="chain.">
         <TrackerBoard />
+      </Section>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+      <Section label="Leaderboard" title="Top" emphasis="earners.">
+        <TopEarners />
+      </Section>
+
+      <Section label="How to read it" title="Trust the" emphasis="chain.">
+        <div className="grid gap-3 lg:grid-cols-3">
           <div className="card">
             <p className="label-lime">01</p>
             <p className="headline mt-2 text-[15px]">Why it is really gone</p>
