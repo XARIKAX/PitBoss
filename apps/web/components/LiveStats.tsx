@@ -100,6 +100,17 @@ export function useFloorStats() {
       (await safeRead(client, c.pit, 'balanceOf', [c.houseBook.address])) as bigint | null,
   });
 
+  /** $PITBOSS pooling at the treasury — the reward half of every activation,
+   *  waiting to be sold for ETH and cranked to activated Bosses. */
+  const treasury = useQuery({
+    queryKey: ['treasuryPit', chainId],
+    enabled: Boolean(client && isDeployed(c.pit.address) && isDeployed(c.pitTreasury.address)),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    queryFn: async (): Promise<bigint | null> =>
+      (await safeRead(client, c.pit, 'balanceOf', [c.pitTreasury.address])) as bigint | null,
+  });
+
   const cap = maxSupply.data != null ? Number(maxSupply.data) : 888;
   const activatedCount = flags.data ? flags.data.filter(Boolean).length : null;
   const burnedTokens = burned.data != null ? Number(formatEther(burned.data)) : null;
@@ -122,6 +133,7 @@ export function useFloorStats() {
      */
     activationsAllTime:
       burnedTokens == null ? null : Math.round(burnedTokens / BURN_PER_ACTIVATION),
+    treasuryTokens: treasury.data != null ? Number(formatEther(treasury.data)) : null,
     bookEth: bar.data != null ? Number(formatEther(bar.data)) : null,
     loading: flags.isLoading || burned.isLoading,
   };
@@ -224,9 +236,9 @@ export function LiveStats() {
         pct={burnPct != null ? Math.min(burnPct * 10, 100) : undefined}
       />
       <Tile
-        label="House Book"
-        value={s.bookEth != null ? `Ξ${s.bookEth.toFixed(4)}` : '—'}
-        sub="waiting for the next crank"
+        label="Reward treasury"
+        value={s.treasuryTokens != null ? compact(s.treasuryTokens) : '—'}
+        sub="$PITBOSS waiting to become rewards"
       />
       <Tile
         label="Bosses minted"
@@ -300,7 +312,7 @@ export function TrackerBoard() {
   const s = useFloorStats();
   const activated = useCountUp(s.activatedCount);
   const burned = useCountUp(s.removedTokens);
-  const book = useCountUp(s.bookEth, 900);
+  const treas = useCountUp(s.treasuryTokens);
 
   const activePct = s.activatedCount != null ? (s.activatedCount / s.cap) * 100 : null;
   const burnPct = s.removedTokens != null ? (s.removedTokens / SUPPLY) * 100 : null;
@@ -453,13 +465,14 @@ export function TrackerBoard() {
 
         <div className="panel-raised p-6 sm:p-8">
           <Hero
-            label="House Book"
-            value={book != null ? book.toFixed(4) : '—'}
-            unit="ETH"
+            label="Reward treasury"
+            value={treas != null ? groupInt(treas) : '—'}
+            unit="$PITBOSS"
             foot={
               <p>
-                Fees waiting for the next crank. When it fills, anyone can trigger the payout and
-                every activated Boss takes a share in real tokenized stock.
+                Half of every activation fee pools here, then gets sold for ETH and paid into
+                the House Book — where every activated Boss takes a share in real tokenized
+                stock. It grows 444,444 at a time.
               </p>
             }
           />
