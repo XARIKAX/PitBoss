@@ -371,8 +371,9 @@ export function TrackerBoard() {
                         <span className="font-mono font-semibold text-paper">
                           {burnPct.toFixed(3)}%
                         </span>{' '}
-                        of the 1B supply, unrecoverable by anyone. 888,888 leaves circulation
-                        with every activation, and again on every resale.
+                        of the 1B supply, unrecoverable by anyone. Every activation burns
+                        444,444 and puts another 444,444 into the pot that pays activated
+                        Bosses. A resale burns again.
                       </>
                     ) : (
                       'Reading the chain…'
@@ -397,12 +398,14 @@ export function TrackerBoard() {
                 </div>
                 <div>
                   <p className="label">Stranded in the House Book</p>
+                  {/* Frozen: new activations route the reward half to PitTreasury. */}
                   <p className="num mt-1 font-mono text-[19px] font-semibold tabular-nums text-gold">
                     {groupInt(s.strandedTokens ?? 0)}
                   </p>
                   <p className="mt-1.5 text-[11.5px] leading-relaxed text-mute">
                     {strandedPct.toFixed(3)}% parked at a contract that handles ETH only. No
-                    function moves it, no owner rescue. Gone in every practical sense.
+                    function moves it, no owner rescue. Frozen at this figure: the reward half
+                    now routes to the treasury instead.
                   </p>
                 </div>
               </div>

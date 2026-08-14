@@ -29,9 +29,10 @@ export default function StatsPage() {
             <p className="headline mt-2 text-[15px]">Why it is really gone</p>
             <p className="mt-2 text-[12.5px] leading-relaxed text-mute">
               Activation costs 888,888 $PITBOSS. Half goes to the dead address, an account nobody
-              holds the keys to. The other half went to the House Book, a contract that handles
-              ETH and has no function that can move a token balance back out. Different
-              addresses, same outcome.
+              holds the keys to, and burns on every activation and every resale. The other half
+              funds rewards for activated Bosses. Early on it went to the House Book, which
+              handles ETH and cannot move a token balance back out, so that portion is frozen
+              here too.
             </p>
           </div>
 
