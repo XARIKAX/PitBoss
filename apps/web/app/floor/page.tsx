@@ -6,6 +6,7 @@ import { formatEther, isAddress, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat, PillLink } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { ConnectButton } from '@/components/ConnectButton';
+import { HowToActivate } from '@/components/HowToActivate';
 import { useContracts, useRead } from '@/lib/contracts';
 import { useTx } from '@/lib/useTx';
 import { useMyBossIds, useBossInfo } from '@/lib/bosses';
@@ -94,6 +95,7 @@ export default function FloorPage() {
 
       {/* ACTIVATE */}
       <Section label="Activate" title="Turn it" emphasis="on.">
+        <HowToActivate />
         <ActivateCard />
       </Section>
     </ChainGuard>
