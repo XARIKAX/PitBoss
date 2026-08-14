@@ -10,6 +10,12 @@
  * Sources, all on-chain, nothing cached or seeded:
  *   activated — isActivated(1..totalMinted), batched via multicall (exact count)
  *   burned    — $PITBOSS balanceOf(0x…dEaD), the sink ActivationManager writes to
+ *   stranded  — $PITBOSS balanceOf(HouseBook). Activation parks half the fee there,
+ *               and the book is ETH-only: no function reads or moves an ERC-20
+ *               balance, and there is no owner rescue. Those tokens are as gone as
+ *               the dead-address half, so the tracker counts them as removed. Read
+ *               live rather than hardcoded — once ActivationManager.setHouseBook
+ *               points at PitTreasury the figure simply stops growing.
  *   book      — HouseBook.bar(), ETH waiting for the next crank
  */
 import { useEffect, useRef, useState } from 'react';
@@ -71,9 +77,22 @@ export function useFloorStats() {
       (await safeRead(client, c.pit, 'balanceOf', [DEAD])) as bigint | null,
   });
 
+  /**
+   * The half of each activation fee parked at the House Book. Unreachable: the
+   * book handles ETH only and exposes no path that moves an ERC-20 balance.
+   */
+  const stranded = useQuery({
+    queryKey: ['strandedPit', chainId],
+    enabled: Boolean(client && isDeployed(c.pit.address) && isDeployed(c.houseBook.address)),
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<bigint | null> =>
+      (await safeRead(client, c.pit, 'balanceOf', [c.houseBook.address])) as bigint | null,
+  });
+
   const cap = maxSupply.data != null ? Number(maxSupply.data) : 888;
   const activatedCount = flags.data ? flags.data.filter(Boolean).length : null;
   const burnedTokens = burned.data != null ? Number(formatEther(burned.data)) : null;
+  const strandedTokens = stranded.data != null ? Number(formatEther(stranded.data)) : null;
 
   return {
     cap,
@@ -81,6 +100,10 @@ export function useFloorStats() {
     flags: flags.data ?? null,
     activatedCount,
     burnedTokens,
+    strandedTokens,
+    /** Everything permanently out of circulation: dead address + stranded book. */
+    removedTokens:
+      burnedTokens == null ? null : burnedTokens + (strandedTokens ?? 0),
     bookEth: bar.data != null ? Number(formatEther(bar.data)) : null,
     loading: flags.isLoading || burned.isLoading,
   };
@@ -163,10 +186,10 @@ function Tile({
 export function LiveStats() {
   const s = useFloorStats();
   const activated = useCountUp(s.activatedCount);
-  const burned = useCountUp(s.burnedTokens);
+  const burned = useCountUp(s.removedTokens);
 
   const activePct = s.activatedCount != null ? (s.activatedCount / s.cap) * 100 : undefined;
-  const burnPct = s.burnedTokens != null ? (s.burnedTokens / SUPPLY) * 100 : undefined;
+  const burnPct = s.removedTokens != null ? (s.removedTokens / SUPPLY) * 100 : undefined;
 
   return (
     <div className="grid content-start gap-3 sm:grid-cols-2">
@@ -177,9 +200,9 @@ export function LiveStats() {
         pct={activePct}
       />
       <Tile
-        label="$PITBOSS burned"
+        label="$PITBOSS removed"
         value={burned != null ? compact(burned) : '—'}
-        sub={burnPct != null ? `${burnPct.toFixed(3)}% of supply, gone` : 'reading chain…'}
+        sub={burnPct != null ? `${burnPct.toFixed(3)}% of supply, unrecoverable` : 'reading chain…'}
         pct={burnPct != null ? Math.min(burnPct * 10, 100) : undefined}
       />
       <Tile
@@ -258,11 +281,13 @@ function Hero({
 export function TrackerBoard() {
   const s = useFloorStats();
   const activated = useCountUp(s.activatedCount);
-  const burned = useCountUp(s.burnedTokens);
+  const burned = useCountUp(s.removedTokens);
   const book = useCountUp(s.bookEth, 900);
 
   const activePct = s.activatedCount != null ? (s.activatedCount / s.cap) * 100 : null;
-  const burnPct = s.burnedTokens != null ? (s.burnedTokens / SUPPLY) * 100 : null;
+  const burnPct = s.removedTokens != null ? (s.removedTokens / SUPPLY) * 100 : null;
+  const deadPct = s.burnedTokens != null ? (s.burnedTokens / SUPPLY) * 100 : null;
+  const strandedPct = s.strandedTokens != null ? (s.strandedTokens / SUPPLY) * 100 : null;
   const dormant = s.activatedCount != null ? s.cap - s.activatedCount : null;
   // Burn already banked plus what the dormant floor would burn if it switched on.
   const potential = dormant != null ? dormant * BURN_PER_ACTIVATION : null;
@@ -329,7 +354,7 @@ export function TrackerBoard() {
           />
           <div className="relative">
             <Hero
-              label="$PITBOSS burned forever"
+              label="$PITBOSS gone forever"
               accent="gold"
               value={burned != null ? groupInt(burned) : '—'}
               foot={
@@ -346,16 +371,42 @@ export function TrackerBoard() {
                         <span className="font-mono font-semibold text-paper">
                           {burnPct.toFixed(3)}%
                         </span>{' '}
-                        of the 1B supply, sent to the dead address and unrecoverable. 444,444
-                        burns with every activation, and again on every resale.
+                        of the 1B supply, unrecoverable by anyone. 888,888 leaves circulation
+                        with every activation, and again on every resale.
                       </>
                     ) : (
-                      'Reading the dead address balance…'
+                      'Reading the chain…'
                     )}
                   </p>
                 </>
               }
             />
+
+            {/* The two sinks, kept separate because only one is a literal burn. */}
+            {deadPct != null && strandedPct != null ? (
+              <div className="mt-6 grid gap-3 border-t border-line/60 pt-5 sm:grid-cols-2">
+                <div>
+                  <p className="label">Dead address</p>
+                  <p className="num mt-1 font-mono text-[19px] font-semibold tabular-nums text-gold">
+                    {groupInt(s.burnedTokens ?? 0)}
+                  </p>
+                  <p className="mt-1.5 text-[11.5px] leading-relaxed text-mute">
+                    {deadPct.toFixed(3)}% burned to 0x…dEaD. An account nobody holds the keys
+                    to.
+                  </p>
+                </div>
+                <div>
+                  <p className="label">Stranded in the House Book</p>
+                  <p className="num mt-1 font-mono text-[19px] font-semibold tabular-nums text-gold">
+                    {groupInt(s.strandedTokens ?? 0)}
+                  </p>
+                  <p className="mt-1.5 text-[11.5px] leading-relaxed text-mute">
+                    {strandedPct.toFixed(3)}% parked at a contract that handles ETH only. No
+                    function moves it, no owner rescue. Gone in every practical sense.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {potential != null ? (
               <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line/60 pt-4">
                 <p className="text-[12px] text-mute">
