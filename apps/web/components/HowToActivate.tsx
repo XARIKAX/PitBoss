@@ -62,17 +62,15 @@ function CopyCA() {
 
 export function HowToActivate() {
   return (
-    <div className="dashed relative mb-4 overflow-hidden bg-lime/[0.03] p-6 sm:p-8">
+    <div className="dashed relative overflow-hidden bg-lime/[0.03] p-6 sm:p-8">
       <span
         aria-hidden
         className="pointer-events-none absolute -top-24 left-1/3 h-[300px] w-[560px] -translate-x-1/2 rounded-full bg-lime/[0.06] blur-3xl"
       />
-      <div className="relative grid gap-8 lg:grid-cols-[1fr_340px] lg:gap-11">
+      <div className="relative grid gap-8 lg:grid-cols-[1fr_480px] lg:gap-12">
         {/* ---- steps ---- */}
         <div>
-          <p className="headline text-h2">Put your Boss on the payroll.</p>
-
-          <div className="mt-6">
+          <div>
             {STEPS.map((s) => (
               <div
                 key={s.n}
@@ -111,9 +109,9 @@ export function HowToActivate() {
             controls
             playsInline
             preload="metadata"
-            className="w-full rounded-[10px] border border-line bg-black"
+            className="max-h-[78vh] w-full rounded-[10px] border border-line bg-black shadow-[0_0_60px_rgba(198,255,0,0.07)]"
           />
-          <p className="label mt-3 text-center">Watch the walkthrough</p>
+          <p className="label mt-3 text-center">Watch the walkthrough · fullscreen from the player</p>
         </div>
       </div>
     </div>

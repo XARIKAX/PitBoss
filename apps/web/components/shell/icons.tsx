@@ -19,6 +19,9 @@ export const IconHome = (p: SVGProps<SVGSVGElement>) => (
 export const IconFloor = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3 3 8l9 5 9-5-9-5Z" /><path d="M3 12l9 5 9-5" /><path d="M3 16l9 5 9-5" /></svg>
 );
+export const IconActivate = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 3v8" /><path d="M17.4 6.6a7.5 7.5 0 1 1-10.8 0" /></svg>
+);
 export const IconPit = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /></svg>
 );
