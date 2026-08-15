@@ -667,6 +667,28 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
       { title: `Auto-DCA #${id.toString()}` },
     );
   }
+  /**
+   * Clear the election so future credit is delivered as plain ETH.
+   *
+   * `setAutoDCA` cannot express this — it rejects the zero address — so the only
+   * way back is `setElection` with empty arrays. That passes validation because
+   * the length check compares the two arrays to each other, the weight loop never
+   * runs, and the `sum != 10_000` rule is guarded by `tokens.length > 0`.
+   *
+   * Only future deliveries change. Stock already sitting in the Boss's account
+   * stays stock.
+   */
+  async function onClearElection() {
+    await send(
+      {
+        address: c.houseBook.address,
+        abi: c.houseBook.abi,
+        functionName: 'setElection',
+        args: [id, [], []],
+      },
+      { title: `Back to ETH #${id.toString()}` },
+    );
+  }
 
   return (
     <div className="card overflow-hidden">
@@ -743,13 +765,26 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
         {d?.election == null || d.election.tokens.length === 0 ? (
           <p className="mt-1 text-xs text-mute">No election set — payouts stay in ETH credit.</p>
         ) : (
-          <ul className="data mt-1 space-y-1 text-xs">
-            {d.election.tokens.map((t, i) => (
-              <li key={t}>
-                {shortAddr(t)} · {(d.election!.weightsBps[i] / 100).toFixed(2)}%
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="data mt-1 space-y-1 text-xs">
+              {d.election.tokens.map((t, i) => (
+                <li key={t}>
+                  {shortAddr(t)} · {(d.election!.weightsBps[i] / 100).toFixed(2)}%
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-mute">
+              Rewards arrive as these tokens, not ETH. Switching back applies to future payouts
+              only — anything already delivered stays put.
+            </p>
+            <button
+              onClick={onClearElection}
+              disabled={busy}
+              className="pill-ghost mt-2 whitespace-nowrap text-xs disabled:opacity-50"
+            >
+              Back to ETH
+            </button>
+          </>
         )}
         <div className="mt-3 flex gap-2">
           <input
