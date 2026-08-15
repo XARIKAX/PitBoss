@@ -21,13 +21,15 @@ The membership layer.
 - **PitBoss NFT collection** — the Bosses. Each Boss owns an **ERC-6551 token
   bound account (TBA)**: a smart-contract wallet the NFT controls, where payroll
   is delivered.
-- **$PIT token** — the protocol's currency. Used to buy Bosses and to activate
-  them.
-- **Flat AMM Vault** — the primary market. Every Boss costs a fixed price in $PIT
-  plus a small ETH fee; buy the next one out of the vault or snipe a specific id.
-- **Activation** — put a Boss on the payroll by burning/parking $PIT. Activation
+- **$PITBOSS token** — the protocol's currency, launched on Pons. Its job is
+  activation: a Boss earns nothing until 888,888 is paid, half burned forever,
+  half sold by the treasury into Boss rewards.
+- **Flat AMM Vault** — the vault market for Bosses that return to inventory.
+  The genesis mint itself was free (FreeMintPass, 888/888 minted); vault buys
+  cost only a small ETH fee that goes to the House Book.
+- **Activation** — put a Boss on the payroll with 888,888 $PITBOSS. Activation
   clears automatically when a Boss is sold, so payroll always follows the current
-  owner.
+  owner — and the next owner pays again.
 - **Floor Position tiers** — your dynamic weight in the payroll split. It grows
   with continuous activation, bankroll participation and launcher activity, and
   resets on transfer.

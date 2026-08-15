@@ -4,12 +4,14 @@ The membership layer. Own a Boss, put it on the payroll, elect how you get paid.
 
 ## Get a Boss
 
-Bosses are sold from the **Flat AMM Vault** at a fixed price: `500,000 $PIT` plus
-a small ETH fee. The ETH fee goes to the House Book.
+The genesis mint was **free** — all 888 minted through the FreeMintPass for gas
+only, and the collection trades on OpenSea. The **Flat AMM Vault** remains the
+protocol's primary market for any Boss that returns to inventory (loan
+liquidations): its `PRICE_PIT` is set to `0`, so buying costs only the ETH fee,
+which goes to the House Book.
 
-- **`buyNext()`** — buy the next Boss: dispenses the oldest one in the vault's
-  inventory, or mints a fresh one if inventory is empty and supply remains. Costs
-  the flat $PIT price + `buyFee` ETH. Approve $PIT first.
+- **`buyNext()`** — buy the next Boss out of vault inventory for `buyFee` ETH
+  (mints fresh only while supply remains).
 - **`snipe(tokenId)`** — buy a specific in-vault Boss for a higher ETH fee
   (`snipeFee`).
 
@@ -54,9 +56,10 @@ By default a Boss is paid in **ETH**. Elect stock tokens instead:
 
 ## Fees
 
-- Buying a Boss: flat `500,000 $PIT` + ETH `buyFee`/`snipeFee` → House Book (AMM
-  fees).
-- Activation: `activationFee` in $PIT, 50% burned / 50% parked at the House Book.
+- Buying a Boss from the vault: ETH `buyFee`/`snipeFee` → House Book (AMM fees).
+  No $PIT charge while `PRICE_PIT` is 0.
+- Activation: `888,888 $PITBOSS` — 50% burned at the dead address, 50% to the
+  PitTreasury, which sells it for ETH into the House Book as Boss rewards.
 
 ## Safety
 

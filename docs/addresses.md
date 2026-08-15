@@ -22,6 +22,8 @@ with the live address for the selected network (Robinhood Chain `4663` or Base
 | ActivationManager | Floor — activation / payroll opt-in | `{{ActivationManager}}` |
 | FloorPosition | Floor — dynamic weight tiers | `{{FloorPosition}}` |
 | HouseBook | House Book — single fee sink + crank | `{{HouseBook}}` |
+| PitTreasury | House Book — sells the activation half into Boss rewards | `{{PitTreasury}}` |
+| RouletteWheelFactory | Pit — roulette wheel factory | `{{RouletteWheelFactory}}` |
 | CertificateCounter | Pit — wrap stock into deeds | `{{CertificateCounter}}` |
 | BearerCertificate | Pit — numbered bearer deeds | `{{BearerCertificate}}` |
 | DegenRollFactory | Pit — roll machine factory | `{{DegenRollFactory}}` |

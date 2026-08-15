@@ -1,8 +1,34 @@
 # The Pit
 
-Where fees are made. The Pit has two counters: the **Certificate Counter** (wrap
-stock into bearer deeds) and the **Degen Roll machines** (roll ETH tickets for
-stock prizes on a player-owned bankroll).
+Where fees are made. The Pit has three counters: the **Roulette wheels** (the
+first live game), the **Degen Roll machines** (roll ETH tickets for stock prizes
+on a player-owned bankroll) and the **Certificate Counter** (wrap stock into
+bearer deeds).
+
+---
+
+## Roulette
+
+European single-zero roulette, one wheel per stock token, deployed by the
+**RouletteWheelFactory**. Bet ETH on a straight number, red/black, odd/even,
+dozen or column; wins pay out in the wheel's stock.
+
+- **Lanes** — `Instant` settles ~30 seconds after the bet, capped at $100 per
+  stake (oracle-priced). `Vault` takes a 10-minute entropy delay with no cap.
+  Entropy is committed before the outcome exists, so results can't be ground.
+- **Solvency** — every open spin reserves its worst-case payout against the
+  bankroll before it is accepted (`totalReserved <= bankroll`); a win can always
+  be paid, and `refund()` is unconditional after 48 hours.
+- **Rake** — 2% of every stake: 0.5% to the wheel's immutable creator address,
+  0.5% to the House Book, 1% to the protocol reserve. The remaining 98% stays in
+  the bankroll that pays winners.
+- **Bankroll** — activated Bosses stake the wheel's stock and earn as the house,
+  including the 5% sell-back spread. `sellBack()` converts won stock to ETH at
+  95% of the oracle mark.
+- **Certificates** — a winning spin can settle via `sealIntoCertificate()`,
+  skipping the sell-back spread entirely.
+
+The wheel has no owner functions; every parameter above is a constant.
 
 ---
 

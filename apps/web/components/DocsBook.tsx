@@ -275,18 +275,18 @@ export function DocsBook() {
           </P>
           <P>
             A fresh Boss earns nothing. <B>Activation</B> costs <B>888,888 $PITBOSS</B> —
-            444,444 burned forever, 444,444 to the House Book — and switches the Boss onto the
-            floor: it accrues weight,
-            builds streaks the longer it stays active, and starts collecting from every crank.
-            Transferring a Boss clears activation; the new owner pays to switch it back on. You
-            choose what you're paid in: <B>elect any listed stock</B> and the book delivers that,
-            or set an auto-DCA target.
+            444,444 burned forever at the dead address, 444,444 to the reward treasury, where it
+            is sold for ETH and paid into the House Book — and switches the Boss onto the floor:
+            it accrues weight, builds streaks the longer it stays active, and starts collecting
+            from every crank. Transferring a Boss clears activation; the new owner pays to switch
+            it back on. You choose what you're paid in: <B>elect any listed stock</B> and the
+            book delivers that, or set an auto-DCA target.
           </P>
           <Facts
             items={[
               ['Supply', '888 fixed'],
-              ['AMM price', '500k PIT'],
-              ['Activation', '500 PIT'],
+              ['Mint price', 'free'],
+              ['Activation', '888,888 PIT'],
               ['Of which burned', '50%'],
               ['Streak cap', '3.33×'],
             ]}
@@ -470,12 +470,18 @@ export function DocsBook() {
           </P>
           <MoneyLoop />
           <P>
-            When the bar crosses its threshold, <B>anyone can pull the crank</B>. The crank swaps
-            the pot into tokenized stock and distributes it across all activated Bosses by floor
-            weight — heavier weight (longer streaks, more activity) earns a larger slice, capped
-            at 3.33× so the front row can't run away with the room. The cranker keeps 0.5% for
-            the gas and the effort; a keeper bot usually beats you to it, and that's fine — the
-            point is that <B>nobody has to be trusted to press the button.</B>
+            The token feeds the same pot. Half of every 888,888 activation fee burns at the dead
+            address; the other half pools at the <B>reward treasury</B>, is sold for ETH, and is
+            paid into the bar alongside the game rake.
+          </P>
+          <P>
+            When the bar crosses its threshold, <B>anyone can pull the crank</B>. The crank
+            credits the pot across all activated Bosses by floor weight — heavier weight (longer
+            streaks, more activity) earns a larger slice, capped at 3.33× so the front row can't
+            run away with the room. Each Boss then pulls its share with <L>deliver</L>, arriving
+            as ETH or swapped into whichever stock it elected. The cranker keeps 0.5% for the gas
+            and the effort; a keeper bot usually beats you to it, and that's fine — the point is
+            that <B>nobody has to be trusted to press the button.</B>
           </P>
           <Rule>
             The book's accounting is one invariant: balance always equals the bar plus what's owed.
@@ -545,11 +551,12 @@ export function DocsBook() {
               <tbody>
                 {(
                   [
+                    ['Roulette spin', '2% rake', '0.5% creator · 0.5% book · 1% protocol'],
                     ['Pit roll', '10% edge', '2.5% creator · 2.5% book · 5% protocol'],
                     ['Pit sell-back', '5% spread', 'bankroll stakers'],
-                    ['Boss buy (AMM)', '0.002 ETH + 500k PIT', 'fee → book'],
-                    ['Boss snipe (AMM)', '0.006 ETH + 500k PIT', 'fee → book'],
-                    ['Activation', '500 PIT', '50% burned · 50% book'],
+                    ['Boss buy (AMM)', '0.002 ETH', 'fee → book'],
+                    ['Boss snipe (AMM)', '0.006 ETH', 'fee → book'],
+                    ['Activation', '888,888 PIT', '50% burned · 50% treasury → book'],
                     ['Certificate seal', '$2 in ETH', '50% book · 50% reserve'],
                     ['Launcher trade', '1% of trade', '70% book · 30% Opening Bell'],
                     ['Bell ring', '—', '0.5% tip to the ringer'],
