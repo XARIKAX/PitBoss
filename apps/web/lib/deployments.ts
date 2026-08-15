@@ -102,7 +102,15 @@ function mapRaw(raw: Record<string, unknown>): Partial<DeploymentMap> {
     const v = raw[pascal];
     if (typeof v === 'string' && v.startsWith('0x')) (out as Record<string, unknown>)[camel] = v;
   }
-  if (typeof raw.StockSample === 'string' && raw.StockSample.startsWith('0x')) {
+  // Only a real sample counts. An unset StockSample is the zero address, which
+  // still starts with "0x" — accepting it produced a non-empty stockTokens map
+  // that shadowed the chain's real stock list, so every consumer filtering on
+  // isDeployed() saw an empty set.
+  if (
+    typeof raw.StockSample === 'string' &&
+    raw.StockSample.startsWith('0x') &&
+    raw.StockSample !== PLACEHOLDER
+  ) {
     out.stockTokens = { tNVDA: raw.StockSample as Address };
   }
   return out;

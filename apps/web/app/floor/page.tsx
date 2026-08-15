@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { formatEther, isAddress, type Address } from 'viem';
+import { formatEther, type Address } from 'viem';
 import { PageHeader, Section, EmptyState, Stat, PillLink } from '@/components/ui';
 import { ChainGuard } from '@/components/ChainGuard';
 import { ConnectButton } from '@/components/ConnectButton';
@@ -628,11 +628,23 @@ function BossLightbox({
 }
 
 function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number }) {
-  const { c } = useContracts();
+  const { c, chain } = useContracts();
   const { send, busy } = useTx();
   const info = useBossInfo(id);
-  const [dcaToken, setDcaToken] = useState('');
+  // 'ETH' clears the election; anything else is a symbol from the chain's stock
+  // list. Deliberately not a free-text address field: setElection accepts any
+  // non-zero address with no route check, so a mistyped or unrouted token makes
+  // deliver() revert and silently strands the Boss's rewards.
+  const [payoutIn, setPayoutIn] = useState('ETH');
   const [enlarged, setEnlarged] = useState(false);
+
+  const payoutOptions = useMemo(
+    () => Object.entries(chain.stockTokens).filter(([, a]) => isDeployed(a)),
+    [chain.stockTokens],
+  );
+  /** Ticker for an elected address, so the panel reads NVDA rather than 0xd06…EEC. */
+  const symbolFor = (token: Address) =>
+    payoutOptions.find(([, a]) => a.toLowerCase() === token.toLowerCase())?.[0];
 
   const d = info.data;
   const fmt = (v: bigint | null | undefined, suffix = '') =>
@@ -655,16 +667,19 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
       { title: `Poke streak #${id.toString()}` },
     );
   }
-  async function onSetDca() {
-    if (!isAddress(dcaToken)) return;
+  /** Apply the dropdown: ETH clears the election, a symbol elects that token. */
+  async function onSetPayout() {
+    if (payoutIn === 'ETH') return onClearElection();
+    const token = chain.stockTokens[payoutIn];
+    if (!token || !isDeployed(token)) return;
     await send(
       {
         address: c.houseBook.address,
         abi: c.houseBook.abi,
         functionName: 'setAutoDCA',
-        args: [id, dcaToken as Address],
+        args: [id, token],
       },
-      { title: `Auto-DCA #${id.toString()}` },
+      { title: `Pay #${id.toString()} in ${payoutIn}` },
     );
   }
   /**
@@ -769,38 +784,42 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
             <ul className="data mt-1 space-y-1 text-xs">
               {d.election.tokens.map((t, i) => (
                 <li key={t}>
-                  {shortAddr(t)} · {(d.election!.weightsBps[i] / 100).toFixed(2)}%
+                  {symbolFor(t) ?? shortAddr(t)} · {(d.election!.weightsBps[i] / 100).toFixed(2)}%
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-xs text-mute">
-              Rewards arrive as these tokens, not ETH. Switching back applies to future payouts
+              Rewards arrive as these tokens, not ETH. Changing this applies to future payouts
               only — anything already delivered stays put.
             </p>
-            <button
-              onClick={onClearElection}
-              disabled={busy}
-              className="pill-ghost mt-2 whitespace-nowrap text-xs disabled:opacity-50"
-            >
-              Back to ETH
-            </button>
           </>
         )}
         <div className="mt-3 flex gap-2">
-          <input
-            value={dcaToken}
-            onChange={(e) => setDcaToken(e.target.value)}
-            placeholder="Auto-DCA token 0x…"
+          <select
+            value={payoutIn}
+            onChange={(e) => setPayoutIn(e.target.value)}
+            aria-label={`Payout currency for Boss #${id.toString()}`}
             className="data w-full rounded-xl border border-line bg-black/40 px-3 py-2 text-xs"
-          />
+          >
+            <option value="ETH">ETH — no conversion</option>
+            {payoutOptions.map(([sym]) => (
+              <option key={sym} value={sym}>
+                {sym}
+              </option>
+            ))}
+          </select>
           <button
-            onClick={onSetDca}
-            disabled={busy || !isAddress(dcaToken)}
+            onClick={onSetPayout}
+            disabled={busy}
             className="pill-ghost whitespace-nowrap text-xs disabled:opacity-50"
           >
-            Set DCA
+            Set payout
           </button>
         </div>
+        <p className="mt-2 text-xs text-mute">
+          Only tokens with a proven swap route are listed. Electing anything else would make
+          delivery fail.
+        </p>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
