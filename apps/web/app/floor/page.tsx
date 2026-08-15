@@ -679,6 +679,12 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
     payoutOptions.find(([, a]) => a.toLowerCase() === token.toLowerCase())?.[0];
 
   const d = info.data;
+  /**
+   * True when the election names something outside the routable set — which the
+   * old free-text field allowed, and which makes deliver() revert InvalidConfig.
+   * Several holders pasted their own wallet address in there.
+   */
+  const unroutable = Boolean(d?.election?.tokens.some((t) => !symbolFor(t)));
   const fmt = (v: bigint | null | undefined, suffix = '') =>
     v == null ? '…' : `${formatEther(v)}${suffix}`;
 
@@ -815,15 +821,28 @@ function BossCard({ id, chainId }: { id: bigint; owner: Address; chainId: number
           <>
             <ul className="data mt-1 space-y-1 text-xs">
               {d.election.tokens.map((t, i) => (
-                <li key={t}>
+                <li key={t} className={symbolFor(t) ? undefined : 'text-red-400'}>
                   {symbolFor(t) ?? shortAddr(t)} · {(d.election!.weightsBps[i] / 100).toFixed(2)}%
+                  {symbolFor(t) ? null : ' · no swap route'}
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-mute">
-              Rewards arrive as these tokens, not ETH. Changing this applies to future payouts
-              only — anything already delivered stays put.
-            </p>
+            {unroutable ? (
+              /* deliver() reverts InvalidConfig on an unrouted token, so the credit
+                 is stuck in the book until the owner changes this — and only the
+                 owner can, ownerOf is checked. Say so plainly rather than showing a
+                 bare address that looks fine. */
+              <p className="mt-2 text-xs text-red-400">
+                Rewards cannot be delivered. This election points at an address the router has no
+                swap route for, so your credit stays in the House Book until you change it. Pick
+                ETH below and hit Set payout — nothing is lost, it pays out as soon as you do.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-mute">
+                Rewards arrive as these tokens, not ETH. Changing this applies to future payouts
+                only — anything already delivered stays put.
+              </p>
+            )}
           </>
         )}
         <div className="mt-3 flex gap-2">
