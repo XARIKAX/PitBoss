@@ -79,10 +79,8 @@ export const CHAINS: Record<number, ChainConfig> = {
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
     wethAddress: robinhoodDeployments.weth !== PLACEHOLDER ? robinhoodDeployments.weth : ROBINHOOD_WETH,
     oracleAddress: robinhoodDeployments.oracle,
-    stockTokens:
-      Object.keys(robinhoodDeployments.stockTokens).length > 0
-        ? robinhoodDeployments.stockTokens
-        : ROBINHOOD_STOCKS,
+    // Configured reward stocks always present; a deployed sample merges on top.
+    stockTokens: { ...ROBINHOOD_STOCKS, ...robinhoodDeployments.stockTokens },
     entropyKind: 'vrf',
     deployments: robinhoodDeployments,
   },

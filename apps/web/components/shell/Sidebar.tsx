@@ -11,6 +11,7 @@ import { SocialLinks } from '@/components/SocialLinks';
 import {
   IconHome,
   IconFloor,
+  IconActivate,
   IconPit,
   IconRoulette,
   IconCert,
@@ -22,14 +23,17 @@ import {
   IconSeasons,
   IconDocs,
   IconStats,
+  IconTables,
   IconClose,
 } from './icons';
 
 const NAV = [
   { href: '/', label: 'Home', icon: IconHome },
   { href: '/floor', label: 'The Floor', icon: IconFloor },
+  { href: '/activate', label: 'Activate', icon: IconActivate },
   { href: '/pit', label: 'The Pit', icon: IconPit },
   { href: '/roulette', label: 'Roulette', icon: IconRoulette },
+  { href: '/tables', label: 'House Tables', icon: IconTables },
   { href: '/certificates', label: 'Certificates', icon: IconCert },
   { href: '/launcher', label: 'Launcher', icon: IconLauncher },
   { href: '/locker', label: 'Locker', icon: IconLocker },

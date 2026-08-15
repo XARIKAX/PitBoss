@@ -13,6 +13,9 @@ import { isDeployed } from '@/lib/deployments';
 import { shortAddr } from '@/lib/format';
 import { explorerAddress } from '@/config/chains';
 
+/** Secondary market for the collection. */
+const OPENSEA_COLLECTION = 'https://opensea.io/collection/pitbosses';
+
 /**
  * The Floor.
  * - Get a Boss: flat AMM buyNext (approve PIT -> buy) / snipe by id.
@@ -43,6 +46,19 @@ export default function FloorPage() {
 
       {/* GET A BOSS */}
       <Section label="Get a Boss" title="Mint" emphasis="free.">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-black/30 px-4 py-3">
+          <p className="text-[12.5px] text-mute">
+            Minted out? Every Boss trades on the secondary market — buy one and activate it.
+          </p>
+          <a
+            href={OPENSEA_COLLECTION}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-ghost shrink-0"
+          >
+            Trade on OpenSea →
+          </a>
+        </div>
         <BossGallery />
         {freeMintLive ? (
           <FreeMintCard />
@@ -334,6 +350,14 @@ function FreeMintCard() {
               ? 'Up to 10 per wallet, one transaction · NFT + its own wallet · no allowlist, no cost'
               : 'Up to 10 per order · one confirmation per Boss until the batch upgrade · no allowlist, no cost'}
           </p>
+          <a
+            href={OPENSEA_COLLECTION}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-ghost w-full justify-center"
+          >
+            Trade on OpenSea →
+          </a>
         </div>
       </div>
     </div>
@@ -608,6 +632,14 @@ function BossLightbox({
           <div>
             <p className="headline text-xl">Boss #{id.toString()}</p>
             <p className="label mt-1">PitBosses · 888 fixed supply · Robinhood Chain</p>
+            <a
+              href={`${OPENSEA_COLLECTION}/${id.toString()}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="label-lime mt-2 inline-flex items-center gap-1 hover:underline"
+            >
+              View on OpenSea →
+            </a>
           </div>
           {activated ? (
             <span className="chip chip-lime bg-lime/5">active</span>

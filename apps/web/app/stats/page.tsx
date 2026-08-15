@@ -22,15 +22,19 @@ export default function StatsPage() {
 
       <Section label="Live" title="On" emphasis="chain.">
         <TrackerBoard />
+      </Section>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+      <Section label="How to read it" title="Trust the" emphasis="chain.">
+        <div className="grid gap-3 lg:grid-cols-3">
           <div className="card">
             <p className="label-lime">01</p>
-            <p className="headline mt-2 text-[15px]">Why the burn is real</p>
+            <p className="headline mt-2 text-[15px]">Why it is really gone</p>
             <p className="mt-2 text-[12.5px] leading-relaxed text-mute">
-              Activation costs 888,888 $PITBOSS. Exactly half, 444,444, goes to the dead address
-              — an account nobody holds the keys to. The counter above is that balance, read from
-              the token contract. Not a claim, a lookup.
+              Activation costs 888,888 $PITBOSS. Half goes to the dead address, an account nobody
+              holds the keys to, and burns on every activation and every resale. The other half
+              funds rewards for activated Bosses. Early on it went to the House Book, which
+              handles ETH and cannot move a token balance back out, so that portion is frozen
+              here too.
             </p>
           </div>
 
@@ -48,8 +52,9 @@ export default function StatsPage() {
             <p className="label-lime">03</p>
             <p className="headline mt-2 text-[15px]">Verify it yourself</p>
             <p className="mt-2 text-[12.5px] leading-relaxed text-mute">
-              Open the token on the explorer and look at the dead address balance. It should match
-              the burn counter to the token.
+              Open the token on the explorer and read two balances: the dead address, and the
+              House Book. Add them together. They match the counter above to the token, because
+              that is exactly how it is calculated.
             </p>
             <div className="mt-3">
               <TokenAddress compact />

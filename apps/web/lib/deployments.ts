@@ -102,10 +102,8 @@ function mapRaw(raw: Record<string, unknown>): Partial<DeploymentMap> {
     const v = raw[pascal];
     if (typeof v === 'string' && v.startsWith('0x')) (out as Record<string, unknown>)[camel] = v;
   }
-  // Only a real sample counts. An unset StockSample is the zero address, which
-  // still starts with "0x" — accepting it produced a non-empty stockTokens map
-  // that shadowed the chain's real stock list, so every consumer filtering on
-  // isDeployed() saw an empty set.
+  // Only surface a sample stock when it is a real address — a zero placeholder
+  // here used to shadow the configured reward stocks (NVDA/TSLA/AAPL).
   if (
     typeof raw.StockSample === 'string' &&
     raw.StockSample.startsWith('0x') &&
