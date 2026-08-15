@@ -6,6 +6,7 @@
  * /public/media (H.264, ~5MB) so the static export serves it directly.
  */
 import { useState } from 'react';
+import Link from 'next/link';
 import { PITBOSS_TOKEN } from '@/components/TokenAddress';
 
 const STEPS = [
@@ -14,18 +15,21 @@ const STEPS = [
     t: 'Get 888,888 $PITBOSS',
     b: 'That is the activation fee for one Boss. Have it in the same wallet that holds the NFT.',
     ca: true,
+    floorLink: false,
   },
   {
     n: '02',
     t: 'Go to the Floor and connect',
-    b: 'pitbosses.xyz/floor — connect the wallet holding your Boss.',
+    b: 'Connect the wallet holding your Boss at',
     ca: false,
+    floorLink: true,
   },
   {
     n: '03',
     t: 'Approve, then Activate',
     b: 'Two transactions. Approve lets the contract take the fee, Activate switches your Boss on.',
     ca: false,
+    floorLink: false,
   },
 ] as const;
 
@@ -81,7 +85,20 @@ export function HowToActivate() {
                   <p className="font-mono text-[14px] font-bold uppercase tracking-[0.04em] text-paper">
                     {s.t}
                   </p>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-mute">{s.b}</p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-mute">
+                    {s.b}
+                    {s.floorLink ? (
+                      <>
+                        {' '}
+                        <Link
+                          href="/floor"
+                          className="font-mono font-semibold text-lime underline decoration-lime/40 underline-offset-4 transition hover:text-acid"
+                        >
+                          pitbosses.xyz/floor
+                        </Link>
+                      </>
+                    ) : null}
+                  </p>
                   {s.ca ? <CopyCA /> : null}
                 </div>
               </div>
