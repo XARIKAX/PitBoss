@@ -94,11 +94,32 @@ case "${1:-}" in
   drain)
     [ -s "$OUT" ] || { echo "run '$0 scan' first"; exit 1; }
     [ -n "${KEY:-}" ] || { echo "KEY is not set"; exit 1; }
+
+    # Shares are keyed to msg.sender and unstake never looks at Boss ownership, so
+    # signing with any other wallet reverts ZeroAmount on every instance. Check once
+    # here rather than discovering it six failed transactions later.
+    # tr, not ${x,,} — macOS ships bash 3.2, where that expansion is a parse error
+    # and would break the whole script, scan included.
+    lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+    signer=$(cast wallet address --private-key "$KEY" 2>/dev/null)
+    if [ "$(lower "$signer")" != "$(lower "$STAKER")" ]; then
+      echo "KEY signs as ${signer:-<unreadable>}, but the shares belong to $STAKER."
+      echo "Set KEY to the staking wallet's key, or override STAKER if you meant a different one."
+      exit 1
+    fi
+
     while read -r sym kind g sharesIn amount; do
       [ "$sharesIn" = "0" ] && { echo "skip $sym $kind (nothing withdrawable)"; continue; }
       printf "unstake %s %s: %s shares (~%s tokens) ... " "$sym" "$kind" "$sharesIn" "$amount"
-      cast send "$g" "unstake(uint256)" "$sharesIn" \
-        --private-key "$KEY" --rpc-url "$RPC" > /dev/null 2>&1 && echo ok || echo FAILED
+      # Keep stderr: a swallowed revert reason is the difference between "retry" and
+      # "you are using the wrong key".
+      if err=$(cast send "$g" "unstake(uint256)" "$sharesIn" \
+                 --private-key "$KEY" --rpc-url "$RPC" 2>&1 >/dev/null); then
+        echo ok
+      else
+        echo FAILED
+        echo "$err" | tail -3 | sed 's/^/        /'
+      fi
     done < "$OUT"
     echo "--- rerun '$0 scan' to confirm"
     ;;
